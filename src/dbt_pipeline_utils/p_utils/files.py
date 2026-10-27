@@ -16,7 +16,6 @@ from dbt_pipeline_utils.p_utils.common import MAX_IDENTIFIER_LEN, SAFE_CHARS
 from dbt_pipeline_utils import logger
 
 
-
 def read_file(filepath):
     path = Path(filepath).resolve()
 
@@ -135,48 +134,6 @@ def deep_merge(existing: dict, incoming: dict) -> dict:
 def tail_path(path: Path, depth: int = 2) -> str:
     parts = path.parts
     return Path(*parts[-(depth + 1) :]).as_posix()
-
-
-def get_existing_yaml(filepath):
-
-    if filepath.exists():
-        with open(filepath, "r") as f:
-            existing_data = yaml.safe_load(f) or {}
-    else:
-        existing_data = {}
-
-    return existing_data
-
-
-def copy_directory(src_dir, dest_dir):
-    """
-    Recursively copies files and subdirectories from src_dir to dest_dir
-    """
-
-    for item in src_dir.rglob("*"):
-        relative_path = item.relative_to(src_dir)
-        target = dest_dir / relative_path
-
-        if item.is_dir():
-            target.mkdir(parents=True, exist_ok=True)
-        else:
-            # Copy file contents manually
-            data = read_file(item)
-            write_file(target, data)        
-
-            logger.debug(f"Copied '{src_dir}' to '{dest_dir}'")
-
-
-def copy_file(src_filepath, dest_filepath):
-    """
-    Recursively copies files and subdirectories from src_dir to dest_dir
-    """
-
-    # Copy file contents manually
-    data = read_file(src_filepath)
-    write_file(dest_filepath, data)
-
-    logger.debug(f"Copied '{src_filepath}' to '{dest_filepath}'")
 
 
 def clean_string(input: str) -> str:
@@ -306,6 +263,3 @@ def normalize_name(
         result += "_"
 
     return result
-
-
-

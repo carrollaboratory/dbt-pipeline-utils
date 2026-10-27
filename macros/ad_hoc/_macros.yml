@@ -1,0 +1,82 @@
+version: 2
+
+macros:
+  - name: generate_placeholder_global_ids_table
+    description: |
+      Creates an empty placeholder global_ids table with the expected schema.
+      Used when a downstream pipeline expects the table to exist before real
+      data is populated.
+
+      Required args:
+        - schema_name
+      Optional args:
+        - table_name (defaults to global_ids)
+
+      Command line usage:
+        dbt run-operation generate_placeholder_global_ids_table --args '{"schema_name": "inc_brainpower_raw"}'
+
+      Explicit table name:
+        dbt run-operation generate_placeholder_global_ids_table --args '{"schema_name": "inc_brainpower_raw", "table_name": "global_ids"}'
+
+      Example sql:
+      create schema if not exists "kf_chr_18_raw";
+      drop table if exists "kf_chr_18_raw"."global_ids";
+      create table "kf_chr_18_raw"."global_ids" as
+      select
+          cast(null as varchar) as "globalId",
+          cast(null as varchar) as "studyGlobalId",
+          cast(null as varchar) as "studyId",
+          cast(null as varchar) as "studyName",
+          cast(null as varchar) as "fhirResourceType",
+          cast(null as varchar) as "descriptor",
+          cast(null as varchar) as "descriptorState",
+          cast(null as timestamp) as "globalIdCreatedAt",
+          cast(null as varchar) as "globalIdCreatedBy",
+          cast(null as timestamp) as "descriptorCreatedAt",
+          cast(null as varchar) as "descriptorCreatedBy"
+      where 1 = 0;
+
+  - name: store_profile
+    description: |
+      Profiles a relation and stores results in a table.
+      This is the primary ad hoc entry point and supports append-only history:
+      only changed profile rows are inserted with a new profiled_at timestamp.
+
+      Required args:
+        - profile_table
+
+      Optional args:
+        - profile_database (defaults to target.database)
+        - profile_schema (defaults to target.schema)
+        - profile_include_columns (list)
+        - profile_exclude_columns (list)
+        - profile_where_clause
+        - profile_group_by (list)
+        - adhoc_database (defaults to profile_database)
+        - adhoc_schema (defaults to profile_schema)
+        - adhoc_table (defaults to profile_<profile_table>)
+
+      Command line usage:
+        dbt run-operation store_profile --args '{"profile_schema": "dev_inc_brainpower_src", "profile_table": "inc_brainpower_src_datasets"}'
+
+  - name: get_profile
+    description: |
+      Backward-compatible wrapper around store_profile.
+      Accepts an args dictionary and forwards all supported profile options.
+
+      Required args:
+        - args (dictionary)
+
+      Command line usage:
+        dbt run-operation get_profile --args '{"profile_schema": "dev_inc_brainpower_src", "profile_table": "inc_brainpower_src_datasets"}'
+
+  - name: run_get_profile
+    description: |
+      Backward-compatible wrapper around store_profile.
+      Accepts an args dictionary and forwards all supported profile options.
+
+      Required args:
+        - args (dictionary)
+
+      Command line usage:
+        dbt run-operation run_get_profile --args '{"profile_schema": "dev_inc_brainpower_src", "profile_table": "inc_brainpower_src_datasets"}'

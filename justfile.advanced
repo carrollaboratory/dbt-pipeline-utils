@@ -1,0 +1,312 @@
+set shell := ["bash", "-cu"]
+set export
+
+import "common.just"
+
+# Advanced generation profile: configured multi-stage runs.
+PROGRAM_ID := "anvil"
+STUDY_ID := "cmg"
+PIPELINE_STAGES := "src int program"
+MODELS_STAGE_ROOT := "acr_dbt_pipeline/models"
+
+DD_FORMAT := "ftd_dd"
+SOURCE_SCHEMA := "anvil_cmg_raw"
+SRC_MATERIALIZED := "table"
+FROM_CLAUSE_TEMPLATE := ""
+# Keep generator reference copies outside dbt's model paths. The SQL generator
+# writes both editable models and *_generated.sql references.
+SQL_REFERENCE_DIR := "pipeline_docs/generated_sql_reference"
+VERSION_LOG := "pipeline_docs/access_version_log.log"
+
+# Inputs to generation: local DD paths and/or in-memory release assets.
+RELEASE_ASSETS := ""
+SRC_RELEASE_ASSETS := ""
+INT_RELEASE_ASSETS := ""
+PROGRAM_RELEASE_ASSETS := ""
+RELEASE_TAG := "latest"
+RELEASE_TOKEN := ""
+REFRESH := ""
+
+# Stage DD directories can be empty when using release assets.
+SRC_DD_DIR := ""
+INT_DD_DIR := ""
+PROGRAM_DD_DIR := ""
+
+# Optional stage-specific output directory overrides. Defaults to: <MODELS_STAGE_ROOT>/<study_id>/<stage>
+SRC_STAGE_DIR := ""
+INT_STAGE_DIR := ""
+PROGRAM_STAGE_DIR := "acr_dbt_pipeline/models/cmg/stb"
+
+# Optional stage-specific table-prefix overrides.
+# When unset, defaults to: <program_id>_<study_id>_<stage>
+SRC_TABLE_PREFIX_STAGE := ""
+INT_TABLE_PREFIX_STAGE := ""
+PROGRAM_TABLE_PREFIX_STAGE := "cmg_stb"
+
+# Direct-usage pass-through vars for the compatibility wrapper recipes below.
+DD_DIR := ""
+MODELS_YML := ""
+MODELS_DOCS := ""
+SOURCES_YML := ""
+SOURCES_DOCS := ""
+SOURCE_NAME := ""
+SQL_DIR := ""
+SRC_SQL_DIR := ""
+SRC_SOURCE_NAME := ""
+
+default:
+    @just --list
+
+help:
+    @just --list --unsorted
+    @printf '%s\n' '' 'Advanced generation examples (csv path and/or in-memory releases):' \
+        '  just -f justfile.advanced STUDY_ID=brainpower generate-stage src' \
+        '  just -f justfile.advanced STUDY_ID=brainpower generate-all-stages' \
+        '  just -f justfile.advanced STUDY_ID=brainpower generate-pipeline-sql' \
+        '  just -f justfile.advanced generate-acr-pipeline' \
+        '  just -f justfile.advanced PIPELINE_STAGES="src int" SRC_DD_DIR="" INT_DD_DIR="" SRC_RELEASE_ASSETS="acr|project-artifacts.zip" INT_RELEASE_ASSETS="kf|project-artifacts.zip" generate-all-stages' \
+        '  just -f justfile.advanced SRC_DD_DIR="" SRC_RELEASE_ASSETS="acr|project-artifacts.zip" generate-stage src' \
+        '  just -f justfile.advanced INT_TABLE_PREFIX_STAGE=anvil_cmg_int generate-stage-model-sql int' \
+        '' \
+        'Refresh from GitHub releases is handled in justfile.access only:' \
+        '  just -f justfile.access help'
+
+_resolve_stage_env := '
+    stage="$STAGE_INPUT"
+    study_id="$STUDY_ID"
+
+    case "$stage" in
+        src)
+            stage_dd_dir="$SRC_DD_DIR"
+            stage_release_assets="${SRC_RELEASE_ASSETS:-$RELEASE_ASSETS}"
+            stage_dir_override="$SRC_STAGE_DIR"
+            stage_table_prefix_override="$SRC_TABLE_PREFIX_STAGE"
+            ;;
+        int)
+            stage_dd_dir="$INT_DD_DIR"
+            stage_release_assets="${INT_RELEASE_ASSETS:-$RELEASE_ASSETS}"
+            stage_dir_override="$INT_STAGE_DIR"
+            stage_table_prefix_override="$INT_TABLE_PREFIX_STAGE"
+            ;;
+        program)
+            stage_dd_dir="$PROGRAM_DD_DIR"
+            stage_release_assets="${PROGRAM_RELEASE_ASSETS:-$RELEASE_ASSETS}"
+            stage_dir_override="$PROGRAM_STAGE_DIR"
+            stage_table_prefix_override="$PROGRAM_TABLE_PREFIX_STAGE"
+            ;;
+        *)
+            echo "Unknown stage: $stage (expected: src|int|program)" >&2
+            exit 2
+            ;;
+    esac
+
+    if [[ -z "$stage_dd_dir" && -z "$stage_release_assets" ]]; then
+        echo "Set ${stage^^}_DD_DIR or ${stage^^}_RELEASE_ASSETS before running stage $stage." >&2
+        exit 2
+    fi
+
+    if [[ -n "$stage_dd_dir" && ! -e "$stage_dd_dir" ]]; then
+        if [[ -n "$stage_release_assets" ]]; then
+            stage_dd_dir=""
+        else
+            echo "Configured DD path does not exist for stage $stage: $stage_dd_dir" >&2
+            exit 2
+        fi
+    fi
+
+    if [[ -d "$stage_dd_dir" && -z "$stage_release_assets" ]]; then
+        shopt -s nullglob nocaseglob
+        dd_files=("$stage_dd_dir"/*_dd.csv "$stage_dd_dir"/*-dd.csv "$stage_dd_dir"/*_dictionary.csv "$stage_dd_dir"/*-dictionary.csv "$stage_dd_dir"/*_dd.xlsx "$stage_dd_dir"/*-dd.xlsx "$stage_dd_dir"/*_dictionary.xlsx "$stage_dd_dir"/*-dictionary.xlsx)
+        if (( ${#dd_files[@]} == 0 )); then
+            echo "No DD files found in $stage_dd_dir for stage $stage." >&2
+            exit 2
+        fi
+    fi
+
+    default_stage_dir="$MODELS_STAGE_ROOT/$study_id/$stage"
+    stage_dir="${stage_dir_override:-$default_stage_dir}"
+
+    default_stage_table_prefix="${PROGRAM_ID}_${study_id}_${stage}"
+    if [[ -n "$stage_table_prefix_override" ]]; then
+        stage_table_prefix="$stage_table_prefix_override"
+    else
+        stage_table_prefix="$default_stage_table_prefix"
+    fi
+
+    stage_models_yml="$stage_dir/_models.yml"
+    stage_models_docs="$stage_dir/_column_descriptions.md"
+    stage_sources_yml="$stage_dir/_sources.yml"
+    stage_sources_docs="$stage_dir/_column_descriptions.md"
+    stage_sql_dir="$stage_dir"
+    stage_src_sql_dir="$stage_dir"
+'
+
+# Direct generator wrappers.
+generate-models-yml:
+    just -f common.just _gen_models
+
+generate-sources-yml:
+    just -f common.just _gen_sources
+
+generate-model-sql:
+    just -f common.just _gen_model_sql
+
+generate-src-sql:
+    just -f common.just _gen_src_sql
+
+generate-stage-models-yml stage:
+    #!/usr/bin/env bash
+    STAGE_INPUT="{{stage}}"
+    {{ _resolve_stage_env }}
+    DD_DIR="$stage_dd_dir" \
+    RELEASE_ASSETS="$stage_release_assets" \
+    TABLE_PREFIX="$stage_table_prefix" \
+    MODELS_YML="$stage_models_yml" \
+    MODELS_DOCS="$stage_models_docs" \
+    just -f common.just _gen_models
+
+generate-stage-sources-yml stage:
+    #!/usr/bin/env bash
+    STAGE_INPUT="{{stage}}"
+    {{ _resolve_stage_env }}
+    DD_DIR="$stage_dd_dir" \
+    RELEASE_ASSETS="$stage_release_assets" \
+    TABLE_PREFIX="$stage_table_prefix" \
+    SOURCES_YML="$stage_sources_yml" \
+    SOURCES_DOCS="$stage_sources_docs" \
+    SOURCE_NAME="$STUDY_ID" \
+    just -f common.just _gen_sources
+
+generate-stage-model-sql stage:
+    #!/usr/bin/env bash
+    STAGE_INPUT="{{stage}}"
+    {{ _resolve_stage_env }}
+    DD_DIR="$stage_dd_dir" \
+    RELEASE_ASSETS="$stage_release_assets" \
+    TABLE_PREFIX="$stage_table_prefix" \
+    SQL_DIR="$stage_sql_dir" \
+    just -f common.just _gen_model_sql
+
+generate-stage-src-sql stage:
+    #!/usr/bin/env bash
+    STAGE_INPUT="{{stage}}"
+    {{ _resolve_stage_env }}
+    DD_DIR="$stage_dd_dir" \
+    RELEASE_ASSETS="$stage_release_assets" \
+    TABLE_PREFIX="$stage_table_prefix" \
+    SRC_SQL_DIR="$stage_src_sql_dir" \
+    SRC_SOURCE_NAME="$STUDY_ID" \
+    just -f common.just _gen_src_sql
+
+generate-stage stage:
+    #!/usr/bin/env bash
+    STAGE_INPUT="{{stage}}"
+    {{ _resolve_stage_env }}
+
+    if [[ "{{stage}}" == "src" ]]; then
+        DD_DIR="$stage_dd_dir" \
+        RELEASE_ASSETS="$stage_release_assets" \
+        TABLE_PREFIX="$stage_table_prefix" \
+        SOURCES_YML="$stage_sources_yml" \
+        SOURCES_DOCS="$stage_sources_docs" \
+        SOURCE_NAME="$STUDY_ID" \
+        just -f common.just _gen_sources
+
+        DD_DIR="$stage_dd_dir" \
+        RELEASE_ASSETS="$stage_release_assets" \
+        TABLE_PREFIX="$stage_table_prefix" \
+        SRC_SQL_DIR="$stage_src_sql_dir" \
+        SRC_SOURCE_NAME="$STUDY_ID" \
+        just -f common.just _gen_src_sql
+    else
+        DD_DIR="$stage_dd_dir" \
+        RELEASE_ASSETS="$stage_release_assets" \
+        TABLE_PREFIX="$stage_table_prefix" \
+        MODELS_YML="$stage_models_yml" \
+        MODELS_DOCS="$stage_models_docs" \
+        just -f common.just _gen_models
+
+        DD_DIR="$stage_dd_dir" \
+        RELEASE_ASSETS="$stage_release_assets" \
+        TABLE_PREFIX="$stage_table_prefix" \
+        SQL_DIR="$stage_sql_dir" \
+        just -f common.just _gen_model_sql
+    fi
+
+generate-all-stages:
+    #!/usr/bin/env bash
+    for stage in $PIPELINE_STAGES; do
+        just -f justfile.advanced \
+          PROGRAM_ID="$PROGRAM_ID" STUDY_ID="$STUDY_ID" PIPELINE_STAGES="$PIPELINE_STAGES" MODELS_STAGE_ROOT="$MODELS_STAGE_ROOT" \
+          DD_FORMAT="$DD_FORMAT" SOURCE_SCHEMA="$SOURCE_SCHEMA" SRC_MATERIALIZED="$SRC_MATERIALIZED" FROM_CLAUSE_TEMPLATE="$FROM_CLAUSE_TEMPLATE" SQL_REFERENCE_DIR="$SQL_REFERENCE_DIR" VERSION_LOG="$VERSION_LOG" \
+          RELEASE_ASSETS="$RELEASE_ASSETS" RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" \
+          SRC_RELEASE_ASSETS="$SRC_RELEASE_ASSETS" INT_RELEASE_ASSETS="$INT_RELEASE_ASSETS" PROGRAM_RELEASE_ASSETS="$PROGRAM_RELEASE_ASSETS" \
+          SRC_DD_DIR="$SRC_DD_DIR" INT_DD_DIR="$INT_DD_DIR" PROGRAM_DD_DIR="$PROGRAM_DD_DIR" \
+          SRC_STAGE_DIR="$SRC_STAGE_DIR" INT_STAGE_DIR="$INT_STAGE_DIR" PROGRAM_STAGE_DIR="$PROGRAM_STAGE_DIR" \
+          SRC_TABLE_PREFIX_STAGE="$SRC_TABLE_PREFIX_STAGE" INT_TABLE_PREFIX_STAGE="$INT_TABLE_PREFIX_STAGE" PROGRAM_TABLE_PREFIX_STAGE="$PROGRAM_TABLE_PREFIX_STAGE" \
+          generate-stage "$stage"
+    done
+
+generate-acr-pipeline:
+    # Generate CMG src/int/program models from ACR, with references outside models/.
+    just -f justfile.advanced \
+      PROGRAM_ID="anvil" \
+      STUDY_ID="cmg" \
+      PIPELINE_STAGES="src int program" \
+      MODELS_STAGE_ROOT="acr_dbt_pipeline/models" \
+      DD_FORMAT="$DD_FORMAT" \
+      SOURCE_SCHEMA="$SOURCE_SCHEMA" \
+      SRC_MATERIALIZED="$SRC_MATERIALIZED" \
+      FROM_CLAUSE_TEMPLATE="$FROM_CLAUSE_TEMPLATE" \
+      SQL_REFERENCE_DIR="$SQL_REFERENCE_DIR" \
+      VERSION_LOG="$VERSION_LOG" \
+      RELEASE_ASSETS="acr|project-artifacts.zip" \
+      SRC_RELEASE_ASSETS="" \
+      INT_RELEASE_ASSETS="" \
+      PROGRAM_RELEASE_ASSETS="" \
+      RELEASE_TAG="$RELEASE_TAG" \
+      RELEASE_TOKEN="$RELEASE_TOKEN" \
+      REFRESH="$REFRESH" \
+      SRC_DD_DIR="" \
+      INT_DD_DIR="" \
+      PROGRAM_DD_DIR="" \
+      SRC_STAGE_DIR="" \
+      INT_STAGE_DIR="" \
+      PROGRAM_STAGE_DIR="acr_dbt_pipeline/models/cmg/stb" \
+      SRC_TABLE_PREFIX_STAGE="" \
+      INT_TABLE_PREFIX_STAGE="" \
+      PROGRAM_TABLE_PREFIX_STAGE="cmg_stb" \
+      generate-all-stages
+
+generate-src-stage-sql:
+    just -f justfile.advanced STUDY_ID="$STUDY_ID" RELEASE_ASSETS="$RELEASE_ASSETS" SRC_RELEASE_ASSETS="$SRC_RELEASE_ASSETS" INT_RELEASE_ASSETS="$INT_RELEASE_ASSETS" PROGRAM_RELEASE_ASSETS="$PROGRAM_RELEASE_ASSETS" RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" SRC_DD_DIR="$SRC_DD_DIR" INT_DD_DIR="$INT_DD_DIR" PROGRAM_DD_DIR="$PROGRAM_DD_DIR" SRC_STAGE_DIR="$SRC_STAGE_DIR" INT_STAGE_DIR="$INT_STAGE_DIR" PROGRAM_STAGE_DIR="$PROGRAM_STAGE_DIR" SRC_TABLE_PREFIX_STAGE="$SRC_TABLE_PREFIX_STAGE" INT_TABLE_PREFIX_STAGE="$INT_TABLE_PREFIX_STAGE" PROGRAM_TABLE_PREFIX_STAGE="$PROGRAM_TABLE_PREFIX_STAGE" generate-stage-src-sql src
+
+generate-int-model-sql:
+    just -f justfile.advanced STUDY_ID="$STUDY_ID" RELEASE_ASSETS="$RELEASE_ASSETS" SRC_RELEASE_ASSETS="$SRC_RELEASE_ASSETS" INT_RELEASE_ASSETS="$INT_RELEASE_ASSETS" PROGRAM_RELEASE_ASSETS="$PROGRAM_RELEASE_ASSETS" RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" SRC_DD_DIR="$SRC_DD_DIR" INT_DD_DIR="$INT_DD_DIR" PROGRAM_DD_DIR="$PROGRAM_DD_DIR" SRC_STAGE_DIR="$SRC_STAGE_DIR" INT_STAGE_DIR="$INT_STAGE_DIR" PROGRAM_STAGE_DIR="$PROGRAM_STAGE_DIR" SRC_TABLE_PREFIX_STAGE="$SRC_TABLE_PREFIX_STAGE" INT_TABLE_PREFIX_STAGE="$INT_TABLE_PREFIX_STAGE" PROGRAM_TABLE_PREFIX_STAGE="$PROGRAM_TABLE_PREFIX_STAGE" generate-stage-model-sql int
+
+generate-program-model-sql:
+    just -f justfile.advanced STUDY_ID="$STUDY_ID" RELEASE_ASSETS="$RELEASE_ASSETS" SRC_RELEASE_ASSETS="$SRC_RELEASE_ASSETS" INT_RELEASE_ASSETS="$INT_RELEASE_ASSETS" PROGRAM_RELEASE_ASSETS="$PROGRAM_RELEASE_ASSETS" RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" SRC_DD_DIR="$SRC_DD_DIR" INT_DD_DIR="$INT_DD_DIR" PROGRAM_DD_DIR="$PROGRAM_DD_DIR" SRC_STAGE_DIR="$SRC_STAGE_DIR" INT_STAGE_DIR="$INT_STAGE_DIR" PROGRAM_STAGE_DIR="$PROGRAM_STAGE_DIR" SRC_TABLE_PREFIX_STAGE="$SRC_TABLE_PREFIX_STAGE" INT_TABLE_PREFIX_STAGE="$INT_TABLE_PREFIX_STAGE" PROGRAM_TABLE_PREFIX_STAGE="$PROGRAM_TABLE_PREFIX_STAGE" generate-stage-model-sql program
+
+generate-pipeline-sql:
+    #!/usr/bin/env bash
+    for stage in $PIPELINE_STAGES; do
+        if [[ "$stage" == src ]]; then
+            recipe=generate-stage-src-sql
+        else
+            recipe=generate-stage-model-sql
+        fi
+        just -f justfile.advanced \
+          PROGRAM_ID="$PROGRAM_ID" STUDY_ID="$STUDY_ID" MODELS_STAGE_ROOT="$MODELS_STAGE_ROOT" \
+          DD_FORMAT="$DD_FORMAT" SOURCE_SCHEMA="$SOURCE_SCHEMA" SRC_MATERIALIZED="$SRC_MATERIALIZED" FROM_CLAUSE_TEMPLATE="$FROM_CLAUSE_TEMPLATE" SQL_REFERENCE_DIR="$SQL_REFERENCE_DIR" VERSION_LOG="$VERSION_LOG" \
+          RELEASE_ASSETS="$RELEASE_ASSETS" SRC_RELEASE_ASSETS="$SRC_RELEASE_ASSETS" INT_RELEASE_ASSETS="$INT_RELEASE_ASSETS" PROGRAM_RELEASE_ASSETS="$PROGRAM_RELEASE_ASSETS" RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" \
+          SRC_DD_DIR="$SRC_DD_DIR" INT_DD_DIR="$INT_DD_DIR" PROGRAM_DD_DIR="$PROGRAM_DD_DIR" \
+          SRC_STAGE_DIR="$SRC_STAGE_DIR" INT_STAGE_DIR="$INT_STAGE_DIR" PROGRAM_STAGE_DIR="$PROGRAM_STAGE_DIR" \
+          SRC_TABLE_PREFIX_STAGE="$SRC_TABLE_PREFIX_STAGE" INT_TABLE_PREFIX_STAGE="$INT_TABLE_PREFIX_STAGE" PROGRAM_TABLE_PREFIX_STAGE="$PROGRAM_TABLE_PREFIX_STAGE" \
+          "$recipe" "$stage"
+    done
+
+clean-dir:
+    #!/usr/bin/env bash
+    if [[ -d "$SQL_DIR" ]]; then
+        find "$SQL_DIR" -type f -name '*_generated.sql' -delete
+    fi

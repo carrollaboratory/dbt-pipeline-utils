@@ -169,3 +169,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# dbt (this repo is importable as a dbt package - see dbt_project.yml)
+target/
+dbt_packages/
+package-lock.yml
+utils_resources/

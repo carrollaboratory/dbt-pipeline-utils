@@ -1,0 +1,185 @@
+version: 2
+
+macros:
+  - name: combined_stb_relations
+    description: |
+      Builds a list of ref() relations for a combined union model.
+      Used by union-style models to collect study-specific stb tables.
+
+      Quickstart:
+        macros/pipeline/docs/combined_stb_relations_quickstart.md
+
+      Required args:
+        - table_name
+      Optional args:
+        - studies_var (defaults to combined_studies)
+
+      Used from model SQL, for example:
+        combined_stb_relations(table_name='patient')
+
+  - name: combined_union_from_current_model
+    description: |
+      Unions the study-specific relations that correspond to the current
+      program model. Intended for use inside union model SQL.
+
+      Quickstart:
+        macros/pipeline/docs/combined_union_from_current_model_quickstart.md
+
+      Optional args:
+        - studies_var (if omitted, inferred from model name: inc_program_ -> inc_studies, kf_program_ -> kf_studies, otherwise combined_studies)
+
+      Used from model SQL, for example:
+        combined_union_from_current_model()
+
+  - name: generate_source_ref_from_current_model
+    description: |
+      Builds and returns a ref() relation by combining a caller-supplied
+      prefix with the current model's table name.
+
+      It strips known stage prefixes from model.name before building the ref:
+        - kf_access_
+        - inc_access_
+        - access_
+        - combined_
+        - inc_program_
+        - kf_program_
+
+      Example for model kf_access_accesspolicy:
+        generate_source_ref_from_current_model(prefix='kf_program')
+      resolves to:
+        ref('kf_program_accesspolicy')
+
+      Required args:
+        - prefix
+      Optional args:
+        - strip_prefixes (list)
+
+  - name: generate_descriptor_view_sql
+    description: |
+      Generates a descriptor view by collecting unique descriptors from
+      available int tables and returning only values missing from
+      inc_brainpower_raw.global_ids for the same fhirResourceType and study.
+
+      Source relation resolution:
+        - Each source is resolved as {table_prefix}{relation_name}
+        - Missing relations are skipped automatically
+
+      Quickstart:
+        macros/pipeline/docs/generate_descriptor_view_sql_quickstart.md
+
+      Required args:
+        - table_prefix
+        - study_global_id
+
+      Used from model SQL, for example:
+        generate_descriptor_view_sql(table_prefix='inc_brainpower_int_', study_global_id='brainpower')
+
+  - name: generate_schema_name
+    description: |
+      Custom schema naming macro used by dbt for seeds and models.
+      It prefixes the target schema and appends the model folder path so dev
+      runs land in predictable schema names.
+
+      Quickstart:
+        macros/pipeline/docs/generate_schema_name_quickstart.md
+
+      Used automatically by dbt; not called directly in model SQL.
+
+  - name: generate_alias_name
+    description: |
+      Custom alias naming macro used by dbt for CDM models.
+      It removes the CDM stage prefix from the warehouse relation name while
+      preserving explicitly configured aliases and leaving non-CDM models
+      unchanged.
+
+      Prefixes removed from CDM model names:
+        - combined_common_
+        - inc_common_
+        - kf_common_
+        - inc_access_
+        - kf_access_
+
+      Example:
+        combined_common_accesspolicy -> accesspolicy
+
+      Used automatically by dbt; not called directly in model SQL.
+
+  - name: generate_stb_sql
+    description: |
+      Generates SQL that joins descriptor sources to GID lookup rows.
+      Used by STB-style models to map descriptors to identifiers.
+
+      Quickstart:
+        macros/pipeline/docs/generate_stb_sql_quickstart.md
+
+      Required args:
+        - base_source
+      Optional args:
+        - gid_lookup
+        - descriptor_sources (list of resource names)
+
+      Used from model SQL, for example:
+        generate_stb_sql(base_source='my_base_model', gid_lookup='my_gid_lookup', descriptor_sources=['Patient'])
+
+  - name: normalize_descriptors
+    description: |
+      Returns a normalized concatenated SQL expression for one or more
+      descriptor columns.
+      Used when building stable composite descriptors from multiple fields.
+
+      Quickstart:
+        macros/pipeline/docs/normalize_descriptors_quickstart.md
+
+      Default behavior per descriptor entry:
+        - trims leading and trailing whitespace
+        - collapses internal whitespace to a single space
+        - preserves case
+        - preserves special characters
+        - escapes the chosen delimiter
+        - converts blank strings to null
+
+      Keep the common case simple by passing a list of SQL expressions:
+        normalize_descriptors(descriptor_cols=['id', 'study_code'])
+
+      For overrides, pass a list item as a dictionary with expr plus only the
+      options you need to change:
+        normalize_descriptors(
+          descriptor_cols=[
+            'id',
+            {'expr': 'file_name', 'escape_delimiter': false},
+            {'expr': 'normalized_hpo_term', 'keep_case': false}
+          ],
+          delimiter=';'
+        )
+
+      A fixed descriptor string can also be normalized with its own override
+      options:
+        normalize_descriptors(
+          descriptor_str='brainpower,v2',
+          descriptor_str_options={'escape_delimiter': true, 'keep_case': true}
+        )
+
+      Required args:
+        - descriptor_cols (list)
+      Optional args:
+        - descriptor_str
+        - delimiter (defaults to ,)
+        - default_options (dictionary)
+        - descriptor_str_options (dictionary)
+
+  - name: warn_slow_models
+    description: |
+      Logs a warning for each model whose execution time exceeds the configured
+      runtime threshold. This is called automatically from on-run-end and does
+      not fail the dbt run.
+
+      Configure the threshold in dbt_project.yml or pass it with --vars:
+        vars:
+          model_runtime_warning_seconds: 300
+
+      Command line example:
+        dbt run --vars '{"model_runtime_warning_seconds": 120}'
+
+      The warning includes the warehouse relation, model name, execution time,
+      threshold, and result status. Query-plan and scan-efficiency analysis is
+      adapter-specific and is not inferred by this macro.

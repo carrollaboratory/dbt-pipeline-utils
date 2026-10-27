@@ -1,0 +1,126 @@
+version: 2
+
+macros:
+  - name: grant_devs_access
+    description: >
+      Shared on-run-end helper that grants a role full access to every schema
+      produced by models matching a given project tag during the current dbt run.
+      The two project-specific wrappers (`grant_inc_devs_access`,
+      `grant_kf_devs_access`) delegate directly to this macro with their
+      fixed `tag` / `users_role` values.
+
+
+      **Behavior:**
+
+      1. Validates that both `tag` and `users_role` are provided; raises a
+         compiler error if either is missing.
+
+      2. Iterates over `results` and collects the schema of every model whose
+         tags contain `tag` ensuring only schemas belonging to the
+         specified project are touched.
+
+      3. If no matching models are found (e.g. the run contained no models with
+         that tag), logs an INFO message and exits without issuing any SQL.
+
+      4. For each collected schema, checks `has_schema_privilege(..., 'USAGE')`
+         and `has_schema_privilege(..., 'CREATE')`.
+         Schemas that already have both privileges are skipped with an INFO log.
+
+      5. For schemas that still need granting, issues:
+           - `GRANT USAGE ON SCHEMA` allows the role to see and interact with the schema.
+           - `GRANT CREATE ON SCHEMA` allows the role to create objects in the schema.
+           - `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA` full DML
+             access on every table that currently exists in the schema.
+           - `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA` access to all existing
+             sequences (required for auto-increment/serial columns).
+           - `ALTER DEFAULT PRIVILEGES ... GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES`
+             ensures future tables created in this schema are automatically accessible.
+           - `ALTER DEFAULT PRIVILEGES ... GRANT USAGE, SELECT ON SEQUENCES` same
+             future coverage for sequences.
+
+
+      6. All actions and skips are logged at INFO level.
+
+    arguments:
+      - name: tag
+        type: string
+        description: >
+          The dbt tag used to identify models belonging to the target project.
+          For example, `include` or `kids_first`. Only models whose tags
+          contain this value will have their schemas granted.
+
+      - name: users_role
+        type: string
+        description: >
+          The database role to receive the grants. Must be an existing role
+          in the target database (e.g. `include_users`, `kf_users`).
+
+  - name: grant_inc_devs_access
+    description: >
+      On-run-end wrapper around `grant_devs_access`. Grants `include_users`
+      access to all schemas produced by models tagged `include` in the current
+      run (e.g. `brainpower`, `aadsc` src/int schemas). Delegates entirely to
+      `grant_devs_access(tag='include', users_role='include_users')`.
+
+  - name: grant_kf_devs_access
+    description: >
+      On-run-end wrapper around `grant_devs_access`. Grants `kf_users`
+      access to all schemas produced by models tagged `kids_first` in the
+      current run. Delegates entirely to
+      `grant_devs_access(tag='kids_first', users_role='kf_users')`.
+
+  - name: grant_schema_role_access
+    description: >
+      Standalone utility macro that grants a specified role full access to a target
+      schema. Unlike the on-run-end grant macros (`grant_inc_devs_access`,
+      `grant_kf_devs_access`), this macro is not tied to a dbt run lifecycle and is
+      intended to be called manually via `dbt run-operation` whenever a new role needs
+      access to the `combined`, `access`, or `*_export` schemas.
+
+
+      **Behavior:**
+
+      1. Validates that both `target_schema` and `users_role` are provided; raises a
+         compiler error if either is missing.
+
+      2. Checks whether the role already holds `USAGE` privilege on the schema using
+         `has_schema_privilege`, and also checks `CREATE` on the same schema.
+         If both are already granted, the macro logs a skip
+         message and exits without issuing grant SQL making it safe to run repeatedly
+         without accumulating duplicate grants.
+
+      3. If access is not yet granted, the macro issues the following statements
+         against the target schema:
+           - `GRANT USAGE ON SCHEMA` allows the role to see and interact with the schema.
+           - `GRANT CREATE ON SCHEMA` allows the role to create objects in the schema.
+           - `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA` full DML
+             access on every table that currently exists in the schema.
+           - `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA` access to all existing
+             sequences (required for auto-increment/serial columns).
+           - `ALTER DEFAULT PRIVILEGES ... GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES`
+             ensures future tables created in this schema are automatically accessible.
+           - `ALTER DEFAULT PRIVILEGES ... GRANT USAGE, SELECT ON SEQUENCES` same
+             future coverage for sequences.
+
+      4. All actions and skips are logged to the dbt console at INFO level.
+
+
+      **Example usage:**
+
+      ```bash
+      dbt run-operation grant_schema_role_access \
+        --args '{"target_schema": "combined", "users_role": "analyst_role"}'
+      ```
+
+    arguments:
+      - name: target_schema
+        type: string
+        description: >
+          The name of the database schema to grant access to. Intended for shared,
+          non-program-specific schemas such as `combined`, `access`, or `fhir_export`.
+
+      - name: users_role
+        type: string
+        description: >
+          The name of the database role to receive the grants. This should be
+          an existing role in the target database.

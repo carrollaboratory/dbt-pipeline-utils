@@ -1,0 +1,170 @@
+set shell := ["bash", "-cu"]
+set export
+
+import "common.just"
+
+# Access refresh profile: GitHub release -> local DD directories only.
+# No generation recipes are defined in this file.
+
+RELEASE_TAG := "latest"
+RELEASE_TOKEN := ""
+REFRESH := ""
+
+RELEASE_REPO := ""
+RELEASE_ARTIFACT := "project-artifacts.zip"
+RELEASE_INTERNAL_PATH := ""
+RELEASE_OUTPUT_PATH := ""
+
+# Refresh inputs for the 3 upstream model bundles.
+# Use short aliases (common, inc, kf, acr) or full GitHub repo URLs.
+COMMON_RELEASE_REPO := "common"
+COMMON_RELEASE_ARTIFACT := "project-artifacts.zip"
+COMMON_RELEASE_INTERNAL_PATH := "project/data-dictionary"
+COMMON_DBT_INTERNAL_PATH := "project/dbt"
+
+INC_RELEASE_REPO := "inc"
+INC_RELEASE_ARTIFACT := "project-artifacts.zip"
+INC_RELEASE_INTERNAL_PATH := "project/data-dictionary"
+INC_DBT_INTERNAL_PATH := "project/dbt"
+
+KF_RELEASE_REPO := "kf"
+KF_RELEASE_ARTIFACT := "project-artifacts.zip"
+KF_RELEASE_INTERNAL_PATH := "project/data-dictionary"
+KF_DBT_INTERNAL_PATH := "project/dbt"
+
+ACR_RELEASE_REPO := "acr"
+ACR_RELEASE_ARTIFACT := "project-artifacts.zip"
+ACR_RELEASE_INTERNAL_PATH := "project/data-dictionary"
+ACR_DBT_INTERNAL_PATH := "project/dbt"
+
+# Destination directories for refreshed DD files.
+COMMON_DD_DIR := "utils_resources/data_dictionaries/access/common_access"
+INC_DD_DIR := "utils_resources/data_dictionaries/access/inc_access"
+KF_DD_DIR := "utils_resources/data_dictionaries/access/kf_access"
+ACR_DD_DIR := "utils_resources/data_dictionaries/access/acr_access"
+
+
+default:
+    @just --list
+
+help:
+    @just -f justfile.access --list --unsorted
+    @printf '%s\n' '' 'Access refresh workflow:' \
+      '  1) Refresh all once: just -f justfile.access cdm_refresh' \
+      '  2) Generate in other profiles (justfile / justfile.advanced) using DD_DIR or RELEASE_ASSETS' \
+      '' \
+      'Refresh recipes:' \
+    '  cdm_refresh_common, cdm_refresh_inc, cdm_refresh_kf, cdm_refresh_acr, cdm_refresh, extract-release-file'
+
+extract-release-file:
+    just -f justfile.access \
+    RELEASE_REPO="$RELEASE_REPO" RELEASE_ARTIFACT="$RELEASE_ARTIFACT" RELEASE_INTERNAL_PATH="$RELEASE_INTERNAL_PATH" RELEASE_OUTPUT_PATH="$RELEASE_OUTPUT_PATH" \
+    RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" \
+    _extract_release_file
+
+cdm_refresh_common:
+    #!/usr/bin/env bash
+    if [[ -z "$COMMON_RELEASE_INTERNAL_PATH" ]]; then
+        echo "Set COMMON_RELEASE_INTERNAL_PATH before cdm_refresh_common." >&2
+        exit 2
+    fi
+    mkdir -p "$COMMON_DD_DIR"
+    args=(
+      "$COMMON_RELEASE_REPO"
+      "$COMMON_RELEASE_ARTIFACT"
+      "$COMMON_RELEASE_INTERNAL_PATH"
+      "$COMMON_DD_DIR"
+      --tag "$RELEASE_TAG"
+    )
+    if [[ -n "$RELEASE_TOKEN" ]]; then args+=(--token "$RELEASE_TOKEN"); fi
+    if [[ -n "$REFRESH" ]]; then args+=(--refresh); fi
+    extract_release_artifact_file "${args[@]}"
+    args[2]="$COMMON_DBT_INTERNAL_PATH"
+    args[3]="$COMMON_DD_DIR/dbt"
+    mkdir -p "$COMMON_DD_DIR/dbt"
+    extract_release_artifact_file "${args[@]}"
+
+cdm_refresh_inc:
+    #!/usr/bin/env bash
+    if [[ -z "$INC_RELEASE_INTERNAL_PATH" ]]; then
+        echo "Set INC_RELEASE_INTERNAL_PATH before cdm_refresh_inc." >&2
+        exit 2
+    fi
+    mkdir -p "$INC_DD_DIR"
+    args=(
+      "$INC_RELEASE_REPO"
+      "$INC_RELEASE_ARTIFACT"
+      "$INC_RELEASE_INTERNAL_PATH"
+      "$INC_DD_DIR"
+      --tag "$RELEASE_TAG"
+    )
+    if [[ -n "$RELEASE_TOKEN" ]]; then args+=(--token "$RELEASE_TOKEN"); fi
+    if [[ -n "$REFRESH" ]]; then args+=(--refresh); fi
+    extract_release_artifact_file "${args[@]}"
+    args[2]="$INC_DBT_INTERNAL_PATH"
+    args[3]="$INC_DD_DIR/dbt"
+    mkdir -p "$INC_DD_DIR/dbt"
+    extract_release_artifact_file "${args[@]}"
+
+cdm_refresh_kf:
+    #!/usr/bin/env bash
+    if [[ -z "$KF_RELEASE_INTERNAL_PATH" ]]; then
+        echo "Set KF_RELEASE_INTERNAL_PATH before cdm_refresh_kf." >&2
+        exit 2
+    fi
+    mkdir -p "$KF_DD_DIR"
+    args=(
+      "$KF_RELEASE_REPO"
+      "$KF_RELEASE_ARTIFACT"
+      "$KF_RELEASE_INTERNAL_PATH"
+      "$KF_DD_DIR"
+      --tag "$RELEASE_TAG"
+    )
+    if [[ -n "$RELEASE_TOKEN" ]]; then args+=(--token "$RELEASE_TOKEN"); fi
+    if [[ -n "$REFRESH" ]]; then args+=(--refresh); fi
+    extract_release_artifact_file "${args[@]}"
+    args[2]="$KF_DBT_INTERNAL_PATH"
+    args[3]="$KF_DD_DIR/dbt"
+    mkdir -p "$KF_DD_DIR/dbt"
+    extract_release_artifact_file "${args[@]}"
+
+cdm_refresh_acr:
+    #!/usr/bin/env bash
+    if [[ -z "$ACR_RELEASE_INTERNAL_PATH" ]]; then
+        echo "Set ACR_RELEASE_INTERNAL_PATH before cdm_refresh_acr." >&2
+        exit 2
+    fi
+    mkdir -p "$ACR_DD_DIR"
+    args=(
+      "$ACR_RELEASE_REPO"
+      "$ACR_RELEASE_ARTIFACT"
+      "$ACR_RELEASE_INTERNAL_PATH"
+      "$ACR_DD_DIR"
+      --tag "$RELEASE_TAG"
+    )
+    if [[ -n "$RELEASE_TOKEN" ]]; then args+=(--token "$RELEASE_TOKEN"); fi
+    if [[ -n "$REFRESH" ]]; then args+=(--refresh); fi
+    extract_release_artifact_file "${args[@]}"
+    args[2]="$ACR_DBT_INTERNAL_PATH"
+    args[3]="$ACR_DD_DIR/dbt"
+    mkdir -p "$ACR_DD_DIR/dbt"
+    extract_release_artifact_file "${args[@]}"
+
+
+cdm_refresh:
+        just -f justfile.access \
+            RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" \
+            COMMON_RELEASE_REPO="$COMMON_RELEASE_REPO" COMMON_RELEASE_ARTIFACT="$COMMON_RELEASE_ARTIFACT" COMMON_RELEASE_INTERNAL_PATH="$COMMON_RELEASE_INTERNAL_PATH" COMMON_DBT_INTERNAL_PATH="$COMMON_DBT_INTERNAL_PATH" COMMON_DD_DIR="$COMMON_DD_DIR" \
+            cdm_refresh_common
+        just -f justfile.access \
+            RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" \
+            INC_RELEASE_REPO="$INC_RELEASE_REPO" INC_RELEASE_ARTIFACT="$INC_RELEASE_ARTIFACT" INC_RELEASE_INTERNAL_PATH="$INC_RELEASE_INTERNAL_PATH" INC_DBT_INTERNAL_PATH="$INC_DBT_INTERNAL_PATH" INC_DD_DIR="$INC_DD_DIR" \
+            cdm_refresh_inc
+        just -f justfile.access \
+            RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" \
+            KF_RELEASE_REPO="$KF_RELEASE_REPO" KF_RELEASE_ARTIFACT="$KF_RELEASE_ARTIFACT" KF_RELEASE_INTERNAL_PATH="$KF_RELEASE_INTERNAL_PATH" KF_DBT_INTERNAL_PATH="$KF_DBT_INTERNAL_PATH" KF_DD_DIR="$KF_DD_DIR" \
+            cdm_refresh_kf
+        just -f justfile.access \
+            RELEASE_TAG="$RELEASE_TAG" RELEASE_TOKEN="$RELEASE_TOKEN" REFRESH="$REFRESH" \
+            ACR_RELEASE_REPO="$ACR_RELEASE_REPO" ACR_RELEASE_ARTIFACT="$ACR_RELEASE_ARTIFACT" ACR_RELEASE_INTERNAL_PATH="$ACR_RELEASE_INTERNAL_PATH" ACR_DBT_INTERNAL_PATH="$ACR_DBT_INTERNAL_PATH" ACR_DD_DIR="$ACR_DD_DIR" \
+            cdm_refresh_acr

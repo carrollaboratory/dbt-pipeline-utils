@@ -1,0 +1,17 @@
+name: 'dbt_pipeline_utils'
+version: '1.0.0'
+config-version: 2
+
+# Macro-only dbt package: no models/seeds/snapshots of its own. Downstream
+# pipeline repos add this repo as a package dependency (see README.md) to
+# import the macros under macros/ (grants/, ad_hoc/, pipeline/).
+macro-paths: ["macros"]
+model-paths: []
+seed-paths: []
+snapshot-paths: []
+analysis-paths: []
+test-paths: []
+
+clean-targets:
+  - "target"
+  - "dbt_packages"

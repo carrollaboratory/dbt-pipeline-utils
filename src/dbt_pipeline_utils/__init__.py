@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from os import getenv
 
 def find_repo_root():
-    """Find the repository root by looking for a requirements.txt file."""
+    """Find the repository root by looking for a requirements.txt file, if any."""
 
     current = Path.cwd()
 
@@ -14,16 +14,18 @@ def find_repo_root():
         if any(parent.glob("*requirements.txt")):
             return parent.resolve()
 
-    raise RuntimeError("Could not find repo root containing requirements.txt")
+    return None
 
 
-# Load the .env file
+# Load the .env file, if one can be found. Optional: standalone scripts should
+# work from any directory, with or without a repo-style .env file present.
 repo_root = find_repo_root()
-env_path = repo_root / ".env"
-success = load_dotenv(dotenv_path=env_path, override=True)
+if repo_root is not None:
+    env_path = repo_root / ".env"
+    success = load_dotenv(dotenv_path=env_path, override=True)
 
 
-#setup logging
+# setup logging
 # Map PUTILS_LOGLEVEL to an integer log level
 LOGLEVEL_STRING = getenv("PUTILS_LOGLEVEL", "INFO").strip().upper()
 llevel = logging._nameToLevel.get(LOGLEVEL_STRING, logging.INFO)

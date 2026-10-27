@@ -19,8 +19,7 @@ classifiers = [
 dependencies = ["pandas",
                 "PyYAML",
                 "python-dotenv",
-                "sqlparse",
-                "locutus @ git+https://github.com/NIH-NCPI/locutus@v2.2.9"
+                "rich"
                 ]
 
 dynamic = ["version"]
@@ -31,9 +30,12 @@ version_file = "src/dbt_pipeline_utils/_version.py"
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
 
-[tool.setuptools.package-data]
-dbt_pipeline_utils = ["data/static/files/**", "data/static/macros/**"]
-
 [project.scripts]
-generate_pipeline = "dbt_pipeline_utils.p_utils.actions.generate_pipeline:main"
-generate_dbt_project = "dbt_pipeline_utils.p_utils.actions.generate_dbt_project:main"
+generate_models_yml = "dbt_pipeline_utils.p_utils.actions.generate_models_yml:main"
+generate_sources_yml = "dbt_pipeline_utils.p_utils.actions.generate_sources_yml:main"
+generate_sql_models = "dbt_pipeline_utils.p_utils.actions.generate_sql_models:main"
+generate_src_models = "dbt_pipeline_utils.p_utils.actions.generate_src_models:main"
+generate_models_yml_from_release_asset = "dbt_pipeline_utils.p_utils.actions.generate_models_yml_from_release_asset:main"
+list_release_assets = "dbt_pipeline_utils.p_utils.actions.list_release_assets:main"
+extract_release_artifact_file = "dbt_pipeline_utils.p_utils.actions.extract_release_artifact_file:main"
+generate_stb_union_sql = "dbt_pipeline_utils.p_utils.actions.generate_stb_union_sql:main"
