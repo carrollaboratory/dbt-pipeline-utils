@@ -174,3 +174,4 @@ cython_debug/
 target/
 dbt_packages/
 package-lock.yml
+utils_resources/

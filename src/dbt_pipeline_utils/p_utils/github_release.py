@@ -20,11 +20,13 @@ REPOSITORY_PRESETS = {
     "kf-access-model": "https://github.com/carrollaboratory/kf-access-model.git",
     "include-access-model": "https://github.com/include-dcc/include-access-model.git",
     "common-access-model": "https://github.com/include-dcc/common-access-model.git",
+    "acr-access-model": "https://github.com/anvilproject/acr-harmonized-data-model.git",
     # Short aliases.
     "kf": "https://github.com/carrollaboratory/kf-access-model.git",
     "include": "https://github.com/include-dcc/include-access-model.git",
     "inc": "https://github.com/include-dcc/include-access-model.git",
     "common": "https://github.com/include-dcc/common-access-model.git",
+    "acr": "https://github.com/anvilproject/acr-harmonized-data-model.git",
 }
 
 

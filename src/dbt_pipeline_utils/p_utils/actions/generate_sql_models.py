@@ -57,9 +57,16 @@ def main():
         help="Directory for the always-current *_generated.sql reference files (defaults to --output-dir).",
     )
     parser.add_argument(
-        "--version-log", default=None, type=Path,
+        "--int-descriptors",
+        action="store_true",
+        help="Create zero-row int table SQL with a null descriptor and commented-out ID columns.",
+    )
+    parser.add_argument(
+        "--version-log",
+        default=None,
+        type=Path,
         help="Path to a CSV log to append a row to per table (source/version/asset/content hash) "
-             "whenever that information changes from the last recorded row for that table.",
+        "whenever that information changes from the last recorded row for that table.",
     )
     args = parser.parse_args()
 
@@ -71,6 +78,7 @@ def main():
         from_clause_template=args.from_clause_template,
         reference_dir=args.reference_dir,
         version_log=args.version_log,
+        int_descriptors=args.int_descriptors,
     )
 
 

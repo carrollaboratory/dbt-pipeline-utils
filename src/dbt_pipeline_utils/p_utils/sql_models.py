@@ -56,6 +56,27 @@ def build_select_sql(columns: list[dict], *, from_clause: str | None = None) -> 
     return sql
 
 
+def build_int_descriptor_sql(
+    columns: list[dict], *, dd_stem: str, from_clause: str | None = None
+) -> str:
+    lines = []
+    for col in columns:
+        name = col["formatted_variable_name"]
+        if name.endswith("_id"):
+            lines.append(f"    -- null::text as {name}, -- Global ID generated in the stb model")
+        else:
+            lines.append(f"    null::text as {name},")
+
+    descriptor_name = _table_base_from_stem(
+        re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", dd_stem)
+    )
+    lines.append(f"    null::text as {descriptor_name}_descriptor")
+    sql = "{{ config(materialized='table') }}\n\nselect\n" + "\n".join(lines)
+    if from_clause:
+        sql += f"\nfrom {from_clause}"
+    return sql + "\nwhere false"
+
+
 def build_src_select_sql(
     columns: list[dict],
     *,
@@ -95,6 +116,7 @@ def generate_sql_models(
     table_names: dict[str, str] | None = None,
     table_prefix: str | None = None,
     version_log: Path | None = None,
+    int_descriptors: bool = False,
 ) -> None:
     """
     Read any set of data dictionaries - a single file, a list of files, a
@@ -141,7 +163,15 @@ def generate_sql_models(
         )
 
         columns = read_data_dictionary(dd_filepath, dd_format=dd_format)
-        sql = build_select_sql(columns, from_clause=from_clause) + "\n"
+        sql = (
+            build_int_descriptor_sql(
+                columns,
+                dd_stem=dd_filepath.stem if hasattr(dd_filepath, "stem") else Path(dd_filepath).stem,
+                from_clause=from_clause,
+            )
+            if int_descriptors
+            else build_select_sql(columns, from_clause=from_clause)
+        ) + "\n"
 
         reference_filepath = reference_dir / f"{table_name}_generated.sql"
         reference_filepath.parent.mkdir(parents=True, exist_ok=True)

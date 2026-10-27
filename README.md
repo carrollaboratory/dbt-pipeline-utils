@@ -59,6 +59,7 @@ Generates dev-owned model SQL plus always-refreshed `_generated.sql` reference f
 | `-f`, `--dd-format` | No | `ftd_dd` | Non-default DD column mapping. |
 | `--from-clause-template` | No | `None` | Emit `from` clauses (for example dbt `source(...)`) using `{table_name}` placeholder. |
 | `--reference-dir` | No | Same as `--output-dir` | Write refreshed `<table>_generated.sql` files to a separate directory. |
+| `--int-descriptors` | No | `False` | Create an empty table template with commented `*_id` columns, null values, and a null `<table>_descriptor` column. |
 | `--version-log` | No | `None` | Track DD version/hash changes per table. |
 | `--release REPO_URL ASSET_NAME` | No* | None | Use release DD asset(s) in memory. |
 | `--release-tag` | No | `latest` | Pull from a specific release tag. |
@@ -138,10 +139,12 @@ This repo now has three profiles that share common generator functions:
 - `justfile.advanced` (advanced): explicit per-stage configuration and staged runs
 - `justfile.access` (access model): refresh-only from GitHub release artifacts to local DD directories
 
-Recommended two-step workflow:
+When using local DD files, the workflow is:
 
 1. Refresh data dictionaries once using `justfile.access` (`cdm_refresh`)
 2. Generate files using `justfile` or `justfile.advanced`
+
+You can instead generate directly from release DD assets in memory, without local DD files or existing SQL models.
 
 ### Quick validation
 
@@ -166,9 +169,25 @@ just STUDY_ID=brainpower PIPELINE_STAGE=program generate-stage
 Stage behavior:
 
 - `src` generates `sources.yml`, source column descriptions, and src SQL models.
-- `int` and `program` generate `models.yml`, model column descriptions, and model SQL files.
+- `int` generates `models.yml`, model column descriptions, and zero-row table SQL with null columns and a `<table>_descriptor` placeholder; `*_id` columns are commented out.
+- `program` generates `models.yml`, model column descriptions, and regular model SQL files.
 
 ### Advanced profile (`justfile.advanced`)
+
+To run from a new pipeline repository, install this Python package (`pip install -e /path/to/pipeline-utils`) and put `justfile.advanced` and `common.just` in that repository's root. Relative input and output paths then refer to the pipeline repository. For a pipeline with only `src` and `int`, use different releases for each stage:
+
+```bash
+just -f justfile.advanced \
+  STUDY_ID=brainpower PIPELINE_STAGES='src int' \
+  MODELS_STAGE_ROOT=models/include \
+  SRC_DD_DIR='' INT_DD_DIR='' \
+  SRC_RELEASE_ASSETS='inc|project-artifacts.zip' \
+  INT_RELEASE_ASSETS='kf|project-artifacts.zip' \
+  RELEASE_TAG=latest \
+  generate-all-stages
+```
+
+Change `inc`/`kf` to release repo URLs or aliases and set `RELEASE_TAG=v1.2.0` to pin a version. Each stage also accepts several space-separated `repo|asset` pairs. Set `DD_FORMAT` if the release DD columns do not use `ftd_dd`. This creates SQL and YAML in `models/include/brainpower/src` and `models/include/brainpower/int`; no models need to exist beforehand. The ZIP must contain `*_dd.*`, `*-dd.*`, `*_dictionary.*`, or `*-dictionary.*` files. Each generator invocation fetches its own release bytes; the in-memory cache does not persist between separate commands.
 
 Generate all configured stages or SQL-only pipeline targets:
 
@@ -193,9 +212,10 @@ Refresh DDs once from the three upstream models (`common`, `inc`, `kf`):
 
 ```bash
 just -f justfile.access cdm_refresh
+just -f justfile.access RELEASE_TAG=v1.2.0 cdm_refresh
 ```
 
-Then run generation in `justfile` or `justfile.advanced` using local DD paths and/or `RELEASE_ASSETS`.
+To use this refresh in another repo, place `justfile.access` and `common.just` there and set `COMMON_DD_DIR`, `INC_DD_DIR`, and `KF_DD_DIR` to destinations in that repo. The first command pulls the latest release by default; the second pins a tag. This downloads DD files; it does not run `git pull` in local checkouts. Then point generation at those directories or use release assets in memory as shown above.
 
 ### Direct usage (compatibility wrappers)
 

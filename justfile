@@ -5,7 +5,7 @@ import "common.just"
 
 # Basic generation profile: one dataset/stage at a time.
 STUDY_ID := "brainpower"
-PIPELINE_STAGE := "src"  # src|int|program
+PIPELINE_STAGE := "src"  # src|int
 
 # Local DD input root (optional when RELEASE_ASSETS is set).
 DD_DIR := "data_dictionaries"
@@ -17,7 +17,6 @@ SOURCE_SCHEMA := "ftd_dd"
 SRC_MATERIALIZED := "table"
 SRC_TABLE_PREFIX := ""
 FROM_CLAUSE_TEMPLATE := ""
-SQL_REFERENCE_DIR := ""
 VERSION_LOG := ""
 
 # Optional in-memory DD inputs (repeatable as "repo|asset" entries).
@@ -44,16 +43,16 @@ default:
 help:
     @just --list --unsorted
     @printf '%s\n' '' 'Basic generation examples (csv path and/or in-memory releases):' \
-    '  just STUDY_ID=brainpower PIPELINE_STAGE=src generate-stage' \
-    '  just STUDY_ID=brainpower PIPELINE_STAGE=int generate-stage' \
-    '  just STUDY_ID=brainpower DD_DIR=data_dictionaries/src generate-stage' \
-    '  just STUDY_ID=brainpower DD_DIR="" RELEASE_ASSETS="inc|project-artifacts.zip" generate-stage' \
-      '' \
-      'Advanced staged generation profile:' \
-      '  just -f justfile.advanced help' \
-      '' \
-      'Refresh from GitHub releases is handled in justfile.access only:' \
-      '  just -f justfile.access help'
+        '  just STUDY_ID=brainpower PIPELINE_STAGE=src generate-stage' \
+        '  just STUDY_ID=brainpower PIPELINE_STAGE=int generate-stage' \
+        '  just STUDY_ID=brainpower DD_DIR=data_dictionaries/src generate-stage' \
+        '  just STUDY_ID=brainpower DD_DIR="" RELEASE_ASSETS="inc|project-artifacts.zip" generate-stage' \
+        '' \
+        'Advanced staged generation profile:' \
+        '  just -f justfile.advanced help' \
+        '' \
+        'Refresh from GitHub releases is handled in justfile.access only:' \
+        '  just -f justfile.access help'
 
 _resolve_basic_paths := '
     stage="$PIPELINE_STAGE"
