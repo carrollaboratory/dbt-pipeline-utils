@@ -1,3 +1,41 @@
+# dbt-pipeline-utils
+
+`dbt-pipeline-utils` is a collection of reusable tools for dbt pipeline
+repositories. It provides:
+
+- Python command-line tools that generate dbt YAML and SQL from data
+  dictionaries.
+- dbt macros for common pipeline tasks, including schema naming, descriptor
+  normalization, combined models, and grants.
+
+The package does not provide dbt models of its own. Use the Python tools
+independently to generate project files, and install the dbt package when you
+want to use its macros.
+
+## Installation
+
+### Python command-line tools
+
+Install from this repository with pip:
+
+```bash
+pip install "git+https://github.com/carrollaboratory/dbt-pipeline-utils.git"
+```
+
+To install a particular branch, tag, or commit, add it after `@`:
+
+```bash
+pip install "git+https://github.com/carrollaboratory/dbt-pipeline-utils.git@<ref>"
+```
+
+The package requires Python newer than 3.10. Its dependencies are installed
+automatically by pip.
+
+To work on a local checkout, install it in editable mode:
+
+```bash
+git clone https://github.com/carrollaboratory/dbt-pipeline-utils.git
+cd dbt-pipeline-utils
 
 # pipeline-utils
 

@@ -175,3 +175,5 @@ target/
 dbt_packages/
 package-lock.yml
 utils_resources/
+*.log*
+logs/
