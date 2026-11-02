@@ -108,6 +108,10 @@ Use version control to review SQL changes between runs. Previously generated `_g
 
 There's no notion of a "stage" baked into the code - int/exp/whatever are just different directories/output paths you choose per call. Use separate `just sql` invocations with different `DD_DIR`, `SQL_DIR`, `TABLE_PREFIX`, and `FROM_CLAUSE_TEMPLATE` values for multiple model sets.
 
+### generate_src_models
+
+Src SQL selects the original, case-preserved DD column name and aliases it to lowercase snake_case (for example, `ID` becomes `"ID"::text as id`). A nonempty `src_variable_name` takes precedence as the source column name. Existing SQL files are overwritten.
+
 ## Release-backed Inputs
 
 The `--release` argument is repeatable and can be combined with local `-i` paths. DD bytes are kept in memory and are not written to disk by the generators.

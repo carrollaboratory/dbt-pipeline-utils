@@ -37,7 +37,12 @@ def _as_str_or_none(value):
     return None if value is None or pd.isna(value) else str(value)
 
 
-def _extract_columns(df: pd.DataFrame, dd_format: str) -> list[dict]:
+def _extract_columns(
+    df: pd.DataFrame,
+    dd_format: str,
+    *,
+    source_fallback_to_original: bool = False,
+) -> list[dict]:
     """Shared column-extraction logic for both file-based and in-memory data dictionaries."""
     if dd_format not in DD_FORMATS:
         raise ValueError(
@@ -59,9 +64,12 @@ def _extract_columns(df: pd.DataFrame, dd_format: str) -> list[dict]:
 
         formatted_variable_name = normalize_name(variable_name, extension="drop")
 
+        source_fallback = (
+            variable_name if source_fallback_to_original else formatted_variable_name
+        )
         src_variable_name = _as_str_or_none(
-            row.get(column_map.get("src_variable_name"), formatted_variable_name)
-        ) or formatted_variable_name
+            row.get(column_map.get("src_variable_name"), source_fallback)
+        ) or source_fallback
 
         columns.append(
             {
@@ -79,13 +87,20 @@ def _extract_columns(df: pd.DataFrame, dd_format: str) -> list[dict]:
     return columns
 
 
-def read_data_dictionary(dd_source: DDSource, dd_format: str = "ftd_dd") -> list[dict]:
+def read_data_dictionary(
+    dd_source: DDSource,
+    dd_format: str = "ftd_dd",
+    *,
+    source_fallback_to_original: bool = False,
+) -> list[dict]:
     """
     Read a single data dictionary - a file path (csv/xlsx) or an
     InMemoryDataDictionary - and return one dict per column.
 
     dd_format selects the column-name mapping to use (see DD_FORMATS in common.py),
     e.g. "ftd_dd", "src_type1", "pipeline_format".
+    When source_fallback_to_original is True, a missing src_variable_name
+    falls back to the original variable_name rather than the normalized name.
     """
     if isinstance(dd_source, InMemoryDataDictionary):
         suffix = dd_source.suffix.lower()
@@ -105,7 +120,9 @@ def read_data_dictionary(dd_source: DDSource, dd_format: str = "ftd_dd") -> list
     else:
         df = read_file(Path(dd_source))
 
-    return _extract_columns(df, dd_format)
+    return _extract_columns(
+        df, dd_format, source_fallback_to_original=source_fallback_to_original
+    )
 
 
 def build_model_entry(

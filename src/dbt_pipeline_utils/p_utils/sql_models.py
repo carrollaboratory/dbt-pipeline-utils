@@ -83,7 +83,7 @@ def build_src_select_sql(
     """
     Build a src model SQL body that:
     - includes dbt config(materialized=...)
-    - selects every DD column
+    - selects every DD column using its original source name
     - casts every selected value to text (string)
     - aliases every output column to lower-snake
     - reads from source(source_name, table_name)
@@ -202,7 +202,8 @@ def generate_src_models(
 
     Each model:
     - includes config(materialized='table')
-    - selects every DD column
+    - selects each column using src_variable_name when specified, otherwise
+      the original variable_name from the DD
     - casts every value to text
     - aliases every output column to lower-snake
     - includes from {{ source(source_name, table_name) }}
@@ -217,7 +218,9 @@ def generate_src_models(
 
     for dd_filepath in _resolve_dd_filepaths(dd_filepaths):
         table_name = _resolve_table_name(dd_filepath, table_names, table_prefix)
-        columns = read_data_dictionary(dd_filepath, dd_format=dd_format)
+        columns = read_data_dictionary(
+            dd_filepath, dd_format=dd_format, source_fallback_to_original=True
+        )
         sql = (
             build_src_select_sql(
                 columns,
