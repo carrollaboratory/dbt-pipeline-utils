@@ -4,18 +4,28 @@ set export
 import "common.just"
 
 # Basic generation profile: one dataset/stage at a time.
+PROGRAM_ID := "inc"
 STUDY_ID := "brainpower"
 PIPELINE_STAGE := "src"  # src|int
 
 # Local DD input root (optional when RELEASE_ASSETS is set).
-DD_DIR := "data_dictionaries"
+DD_DIR := "../test_files/inc_brainpower"
 MODELS_STAGE_ROOT := "include_kf_dbt_harmonization/models/include"
 
 DD_FORMAT := "ftd_dd"
-TABLE_PREFIX := ""
-SOURCE_SCHEMA := "ftd_dd"
 SRC_MATERIALIZED := "table"
+
+# Stage naming. Empty values are derived from PROGRAM_ID and STUDY_ID by the
+# stage recipes; set a value to override it, or `none` to disable a prefix.
+#   SOURCE_SCHEMA        -> <program_id>_<study_id>_raw
+#   SRC_TABLE_PREFIX     -> <program_id>_<study_id>_src
+#   SRC_SOURCE_NAME      -> <program_id>_<study_id>_src
+#   TABLE_PREFIX (int)   -> <program_id>_<study_id>_int   (src stays unprefixed)
+#   FROM_CLAUSE_TEMPLATE (int) -> {{ ref('<src_table_prefix>_{base_name}') }}
+TABLE_PREFIX := ""
+SOURCE_SCHEMA := ""
 SRC_TABLE_PREFIX := ""
+SRC_SOURCE_NAME := ""
 FROM_CLAUSE_TEMPLATE := ""
 VERSION_LOG := ""
 
@@ -35,7 +45,6 @@ SOURCES_DOCS := ""
 SOURCE_NAME := ""
 SQL_DIR := ""
 SRC_SQL_DIR := ""
-SRC_SOURCE_NAME := ""
 
 default:
     @just --list
@@ -88,6 +97,21 @@ _resolve_basic_paths := '
     run_sources_docs="$stage_dir/_column_descriptions.md"
     run_sql_dir="$stage_dir"
     run_src_sql_dir="$stage_dir"
+
+    name_base="${PROGRAM_ID}_${study_id}"
+    export SOURCE_SCHEMA="${SOURCE_SCHEMA:-${name_base}_raw}"
+    export SRC_TABLE_PREFIX="${SRC_TABLE_PREFIX:-${name_base}_src}"
+    export SRC_SOURCE_NAME="${SRC_SOURCE_NAME:-${name_base}_src}"
+    if [[ "$SRC_TABLE_PREFIX" == "none" ]]; then SRC_TABLE_PREFIX=""; fi
+    if [[ "$stage" == "int" ]]; then
+        export TABLE_PREFIX="${TABLE_PREFIX:-${name_base}_int}"
+        if [[ -z "$FROM_CLAUSE_TEMPLATE" ]]; then
+            ref_name="{base_name}"
+            if [[ -n "$SRC_TABLE_PREFIX" ]]; then ref_name="${SRC_TABLE_PREFIX}_{base_name}"; fi
+            export FROM_CLAUSE_TEMPLATE="{{ ref($(printf "\047")${ref_name}$(printf "\047")) }}"
+        fi
+    fi
+    if [[ "$TABLE_PREFIX" == "none" ]]; then TABLE_PREFIX=""; fi
 '
 
 # Direct generator wrappers.
@@ -117,7 +141,7 @@ generate-stage-sources-yml:
     DD_DIR="$run_dd_dir" \
     SOURCES_YML="$run_sources_yml" \
     SOURCES_DOCS="$run_sources_docs" \
-    SOURCE_NAME="$STUDY_ID" \
+    SOURCE_NAME="$SRC_SOURCE_NAME" \
     just -f common.just _gen_sources
 
 generate-stage-model-sql:
@@ -132,7 +156,7 @@ generate-stage-src-sql:
     {{ _resolve_basic_paths }}
     DD_DIR="$run_dd_dir" \
     SRC_SQL_DIR="$run_src_sql_dir" \
-    SRC_SOURCE_NAME="$STUDY_ID" \
+    SRC_SOURCE_NAME="$SRC_SOURCE_NAME" \
     just -f common.just _gen_src_sql
 
 generate-stage:
@@ -143,12 +167,12 @@ generate-stage:
         DD_DIR="$run_dd_dir" \
         SOURCES_YML="$run_sources_yml" \
         SOURCES_DOCS="$run_sources_docs" \
-        SOURCE_NAME="$STUDY_ID" \
+        SOURCE_NAME="$SRC_SOURCE_NAME" \
         just -f common.just _gen_sources
 
         DD_DIR="$run_dd_dir" \
         SRC_SQL_DIR="$run_src_sql_dir" \
-        SRC_SOURCE_NAME="$STUDY_ID" \
+        SRC_SOURCE_NAME="$SRC_SOURCE_NAME" \
         just -f common.just _gen_src_sql
     else
         DD_DIR="$run_dd_dir" \

@@ -1,5 +1,5 @@
 """
-CLI: generate dbt SQL models (plus always-current, diffable reference copies)
+CLI: generate dbt SQL models
 from any set of data dictionary files.
 
 Accepts one or more files and/or directories in a single call, e.g.:
@@ -9,14 +9,8 @@ Accepts one or more files and/or directories in a single call, e.g.:
         -o models/int \\
         --from-clause-template "{{ source('raw_study', '{table_name}') }}"
 
-Each model file (models/int/<table>.sql) is created once and never
-overwritten - data devs hand-edit it to harmonize the data. A
-models/int/<table>_generated.sql file is always refreshed with the current
-dd-derived SQL, so a dev can run:
-
-    diff models/int/<table>_generated.sql models/int/<table>.sql
-
-to see exactly what's changed in the dd since they last harmonized the model.
+Each model file (models/int/<table>.sql) is replaced on every run, including
+any manual edits. No separate reference copies are written.
 """
 
 import argparse
@@ -28,7 +22,7 @@ from dbt_pipeline_utils.p_utils.sql_models import generate_sql_models
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate dbt SQL models (plus diffable reference copies) from any set of data dictionary files."
+        description="Generate dbt SQL models from data dictionaries, overwriting existing SQL files."
     )
     parser.add_argument(
         "-i", "--dd-filepaths", nargs="+", type=Path, default=[],
@@ -37,7 +31,7 @@ def main():
     )
     parser.add_argument(
         "-o", "--output-dir", required=True, type=Path,
-        help="Directory for the dev-owned, hand-edited *.sql model files.",
+        help="Directory for *.sql model files. Existing files, including manual edits, are overwritten.",
     )
     add_release_arguments(parser)
     parser.add_argument(
@@ -50,11 +44,12 @@ def main():
     )
     parser.add_argument(
         "--from-clause-template", default=None,
-        help="Literal \"{table_name}\" is replaced per dd, e.g. \"{{ source('raw_study', '{table_name}') }}\".",
+        help="Literal \"{table_name}\" is replaced per dd, e.g. \"{{ source('raw_study', '{table_name}') }}\". "
+             "\"{base_name}\" is the table name without --table-prefix, e.g. \"{{ ref('inc_program_{base_name}') }}\".",
     )
     parser.add_argument(
         "--reference-dir", default=None, type=Path,
-        help="Directory for the always-current *_generated.sql reference files (defaults to --output-dir).",
+        help="Deprecated and ignored. No reference copies are generated.",
     )
     parser.add_argument(
         "--int-descriptors",

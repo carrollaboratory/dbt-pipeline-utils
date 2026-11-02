@@ -4,19 +4,15 @@ Standalone data-dictionary -> dbt SQL model generation.
 Same philosophy as models_yml.py/sources_yml.py: functions take explicit
 paths and plain values, with no dependency on a shared study/project config.
 
-Each dd produces one hand-editable SQL model file. That file is created once
-and never overwritten, since data devs harmonize it by hand afterwards.
-Alongside it, a "<table>_generated.sql" reference file is always (re)written
-with the current dd-derived SQL, so devs can diff the two to see exactly
-what's changed in the dd since the model was last harmonized:
-
-    diff models/int/patients.sql models/int/patients_generated.sql
+Each dd produces one SQL model file, replaced on every run with the current
+dd-derived SQL. No separate reference copies are written.
 """
 
 from collections.abc import Iterable
 from pathlib import Path
 import re
 
+from dbt_pipeline_utils import logger
 from dbt_pipeline_utils.p_utils.common import type_mapping
 from dbt_pipeline_utils.p_utils.files import normalize_name, write_file
 from dbt_pipeline_utils.p_utils.models_yml import (
@@ -126,15 +122,15 @@ def generate_sql_models(
 
     If a directory is given, every "*_dd.*"/"*-dd.*" file in it is included.
 
-    Each model file (output_dir/<table_name>.sql) is created if missing and
-    never overwritten once it exists, since data devs hand-edit it to
-    harmonize the data. A "<table_name>_generated.sql" file next to it (or
-    under reference_dir, if given) is always (re)written with the current
-    dd-derived SQL - diff the two to see exactly what's changed in the dd
-    since the model was last harmonized.
+    Each model file (output_dir/<table_name>.sql) is replaced on every run,
+    including any manual edits. No separate reference copies are written.
+    reference_dir is deprecated and ignored.
 
     from_clause_template, if given, has the literal substring "{table_name}"
     replaced per dd, e.g. "{{ source('raw_study', '{table_name}') }}".
+    "{base_name}" is replaced with the table name without table_prefix, e.g.
+    "{{ ref('inc_program_{base_name}') }}" with table_prefix "inc_access"
+    -> "{{ ref('inc_program_accesspolicy') }}".
 
     table_names optionally maps a dd file stem -> table name; any dd file not
     listed defaults to its normalized filename stem (with a trailing
@@ -149,15 +145,22 @@ def generate_sql_models(
     that table, so re-running against unchanged data doesn't grow the log.
     """
     output_dir = Path(output_dir)
-    reference_dir = Path(reference_dir) if reference_dir else output_dir
+    if reference_dir is not None:
+        logger.warning(
+            "reference_dir is deprecated and ignored; SQL models are overwritten "
+            "in output_dir without reference copies."
+        )
     table_names = table_names or {}
     version_entries: list[tuple[str, dict]] = []
 
     for dd_filepath in _resolve_dd_filepaths(dd_filepaths):
         table_name = _resolve_table_name(dd_filepath, table_names, table_prefix)
+        base_name = _resolve_table_name(dd_filepath, table_names, None)
 
         from_clause = (
-            from_clause_template.replace("{table_name}", table_name)
+            from_clause_template.replace("{table_name}", table_name).replace(
+                "{base_name}", base_name
+            )
             if from_clause_template
             else None
         )
@@ -173,12 +176,6 @@ def generate_sql_models(
             else build_select_sql(columns, from_clause=from_clause)
         ) + "\n"
 
-        reference_filepath = reference_dir / f"{table_name}_generated.sql"
-        reference_filepath.parent.mkdir(parents=True, exist_ok=True)
-        reference_filepath.write_text(sql, encoding="utf-8")
-
-        # write_file() never overwrites an existing *.sql file - the dev's
-        # harmonized model is left untouched once it exists.
         write_file(output_dir / f"{table_name}.sql", sql)
 
         if version_log:

@@ -96,12 +96,9 @@ def write_file(
                 f.write(data)
             return
 
-        # SQL FILES - Don't overwrite.
-        if suffix in {".sql"} and filepath.exists():
-            return
-        elif suffix in {".sql"} and not filepath.exists():
-            file_mode = "w"
-            with filepath.open(file_mode, encoding="utf-8") as f:
+        # SQL FILES
+        if suffix == ".sql":
+            with filepath.open("w", encoding="utf-8") as f:
                 f.write(data)
             return
 

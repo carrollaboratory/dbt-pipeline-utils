@@ -87,16 +87,16 @@ Builds/updates a dbt `sources.yml` block from DDs with the same merge semantics.
 
 ### generate_sql_models
 
-Generates dev-owned model SQL plus always-refreshed `_generated.sql` reference files.
+Generates one `<table>.sql` model per data dictionary, overwriting the previous file on every run, including manual edits. No `_generated.sql` reference files are created.
 
 | Argument | Required | Default | When to use |
 |---|---|---|---|
 | `-i`, `--dd-filepaths` | No* | `[]` | Local DD files/directories. |
-| `-o`, `--output-dir` | Yes | None | Directory for hand-edited `<table>.sql` files. |
+| `-o`, `--output-dir` | Yes | None | Directory for `<table>.sql` files, replaced on every run. |
 | `-p`, `--table-prefix` | No | `None` | Prefix output table/model names. |
 | `-f`, `--dd-format` | No | `ftd_dd` | Non-default DD column mapping. |
-| `--from-clause-template` | No | `None` | Emit `from` clauses (for example dbt `source(...)`) using `{table_name}` placeholder. |
-| `--reference-dir` | No | Same as `--output-dir` | Write refreshed `<table>_generated.sql` files to a separate directory. |
+| `--from-clause-template` | No | `None` | Emit `from` clauses (for example dbt `source(...)`) using `{table_name}` placeholder; `{base_name}` is the name without `--table-prefix`. |
+| `--reference-dir` | No | `None` | Deprecated and ignored; accepted for compatibility only. |
 | `--int-descriptors` | No | `False` | Create an empty table template with commented `*_id` columns, null values, and a null `<table>_descriptor` column. |
 | `--version-log` | No | `None` | Track DD version/hash changes per table. |
 | `--release REPO_URL ASSET_NAME` | No* | None | Use release DD asset(s) in memory. |
@@ -104,11 +104,7 @@ Generates dev-owned model SQL plus always-refreshed `_generated.sql` reference f
 | `--release-token` | No | `None` | Private repo auth. |
 | `--refresh` | No | `False` | Force fresh pull instead of in-memory cache. |
 
-Example diff workflow:
-
-```bash
-diff models/int/patients.sql models/int/patients_generated.sql
-```
+Use version control to review SQL changes between runs. Previously generated `_generated.sql` files are not automatically deleted.
 
 There's no notion of a "stage" baked into the code - int/exp/whatever are just different directories/output paths you choose per call. Use separate `just sql` invocations with different `DD_DIR`, `SQL_DIR`, `TABLE_PREFIX`, and `FROM_CLAUSE_TEMPLATE` values for multiple model sets.
 

@@ -46,6 +46,13 @@ _gen_model_sql:
     generate_sql_models "${args[@]}"
 
 [private]
+_gen_stb_union_sql:
+    #!/usr/bin/env bash
+    {{ _dd_source_args }}
+    args+=(-o "$SQL_DIR" --studies-var "$STUDIES_VAR" --model-prefix "${TABLE_PREFIX:-}")
+    generate_stb_union_sql "${args[@]}"
+
+[private]
 _gen_src_sql:
     #!/usr/bin/env bash
     {{ _dd_source_args }}
