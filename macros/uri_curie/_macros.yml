@@ -1,0 +1,109 @@
+version: 2
+
+macros:
+  - name: regex_match
+    description: |
+      Cross-adapter boolean regex match. Postgres uses `~`, DuckDB uses
+      regexp_matches(). Single quotes in the pattern are escaped for you.
+        regex_match('website', uri_curie_patterns()['http_uri'])
+
+  - name: uri_curie_patterns
+    description: |
+      Single source of truth for URI / CURIE regexes, shared by the generic
+      tests and by URI/CURIE generator macros. Returns a dict:
+        - uri: lowercase `scheme://host...` or `urn:...`, no whitespace.
+          Rootless forms (e.g. `dbgap:phs001`) are deliberately not URIs here.
+        - http_uri: lowercase `http(s)://` + non-empty host, no whitespace.
+        - doi: DOI name syntax: `10.` + 4-9 digit registrant code + `/` + non-whitespace suffix.
+        - curie: `prefix:reference`, prefix is `[A-Za-z_][A-Za-z0-9_.-]*`,
+          reference is non-empty, has no whitespace, and does not start with `/`.
+          Prefix case is preserved by validation; local id case is preserved.
+        - curie_prefix: a bare prefix, case-insensitive for format validation.
+
+  - name: normalize_curie
+    description: |
+      SQL expression that trims a value and rewrites its prefix to the exact
+      canonical spelling in the seed (case-insensitive match on prefix or
+      alias_prefix). Full URIs and urn: values pass through. Unknown prefixes
+      pass through unchanged so valid_curie_prefix can flag them.
+      Only use for prefixes that are defined externally (eg Bioregistry); we do
+      not mint prefixes. Study-local ids use source_identifier_uri instead.
+      Args:
+        - default_prefix: prepended only to values matching the prefix's known
+          pattern. Built-in: dbgap (phs study accessions).
+          Non-matching values pass through unchanged.
+        - local_id_pattern: optional regex override for a built-in, or required
+          for other prefixes (e.g. '^0[a-z0-9]{6}[0-9]{2}$' for a ROR id).
+        - prefix_seed (default curie_prefixes), prefix_column (default prefix),
+          alias_column (default alias_prefix)
+      Source forms like MONDO_0005148 must be rewritten by the harmonizer first.
+      Example:
+        normalize_curie('dbgap', default_prefix='dbgap')
+
+  - name: source_identifier_uri
+    description: |
+      SQL expression that mints a URI for a study-local source id (participant,
+      sample barcode, family id, ...) that has no external definition:
+        https://identifier.includedcc.org/source/{study_id}/{encoded id}
+      Trims the id, percent-encodes % space / ? #, and returns null for blank ids.
+      study_id must be the Dewrangle study id (sd-xxxxxxxxxx).
+      Example:
+        source_identifier_uri('id', 'sd-dbaknypgqp') as external_id
+
+  - name: normalize_http_uri
+    description: |
+      SQL expression for web addresses: trims, lowercases an http/https scheme,
+      and adds default_scheme (default https) only to values shaped like
+      host.tld[/path], so example.org/study/123 becomes
+      https://example.org/study/123. Anything else passes through unchanged.
+      Example:
+        normalize_http_uri('study_website') as website
+
+  - name: normalize_doi
+    description: |
+      Trims surrounding whitespace and converts an empty value to null.
+      Preserves the bare DOI string; it does not add `doi:` or a resolver URL.
+      DOI suffixes are case-sensitive, so their case is preserved.
+      Example: normalize_doi('do_id') as do_id
+
+  - name: test_valid_uri_format
+    description: |
+      Fails non-null values that are not a full URI (uri_curie_patterns()['uri']).
+      Use for LinkML `uri` slots.
+
+  - name: test_valid_http_uri
+    description: |
+      Fails non-null values that are not an http(s) URL
+      (uri_curie_patterns()['http_uri']). Use for web-address slots like website.
+
+  - name: test_valid_doi_format
+    description: |
+      Fails non-null values that do not match the basic DOI name syntax in
+      uri_curie_patterns()['doi']. Use for bare DOI string fields such as do_id.
+
+  - name: test_uri_or_curie_format
+    description: |
+      Fails non-null values that are neither a full URI nor a CURIE.
+      Use for LinkML `uriorcurie` slots. Pair with valid_curie_prefix.
+
+  - name: test_curie_format
+    description: |
+      Fails non-null values that are not a CURIE (uri_curie_patterns()['curie']).
+      Use for Concept-ranged slots. Pair with valid_curie_prefix.
+
+  - name: test_accepted_values_or_uri_or_curie
+    description: |
+      For slots that allow an enum or a URI/CURIE (eg program, organism_type).
+      A value passes if it is in `values`; otherwise it must be a URI or CURIE.
+      Pair with valid_curie_prefix to also check CURIE prefixes.
+      Args:
+        - values: list of accepted enum values
+
+  - name: test_valid_curie_prefix
+    description: |
+      Fails values that parse as a CURIE whose exact prefix spelling is not in
+      the prefix seed. Full URIs and malformed values are skipped
+      (uri_or_curie_format catches those). Normalize known case variants first.
+      Args:
+        - prefix_seed (default curie_prefixes)
+        - prefix_column (default prefix)

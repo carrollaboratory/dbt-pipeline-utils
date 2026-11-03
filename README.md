@@ -7,10 +7,11 @@ repositories. It provides:
   dictionaries.
 - dbt macros for common pipeline tasks, including schema naming, descriptor
   normalization, combined models, and grants.
+- Reusable dbt generic tests for URI, CURIE, and DOI validation.
 
 The package does not provide dbt models of its own. Use the Python tools
 independently to generate project files, and install the dbt package when you
-want to use its macros.
+want to use its macros and generic tests.
 
 ## Installation
 
@@ -36,6 +37,8 @@ To work on a local checkout, install it in editable mode:
 ```bash
 git clone https://github.com/carrollaboratory/dbt-pipeline-utils.git
 cd dbt-pipeline-utils
+pip install -e .
+```
 
 # pipeline-utils
 
@@ -319,15 +322,21 @@ just -f justfile.access RELEASE_REPO=kf \
 
 For non-GitHub-release sources, a project-specific importer can still be supplied via `DDS_PULL_COMMAND` and run with `just DDS_PULL_COMMAND='...' pull-dd` to populate `DD_DIR` before generation.
 
-## Shared dbt macros
+## Shared dbt macros and generic tests
 
-This repo is itself importable as a dbt package, so macros in [`macros/`](macros/) (`grants/`, `ad_hoc/`, `pipeline/`) can be reused across pipeline repos instead of copy-pasted into each one. It has no models/seeds of its own - `dbt_project.yml` only declares `macro-paths`.
+This repo is importable as a dbt package. It exports [`macros/`](macros/)
+through `macro-paths`. The dependent URI/CURIE macros, regex helpers, and
+generic tests are grouped in
+[`uri_curie.sql`](macros/uri_curie/uri_curie.sql); their public names and
+arguments are unchanged. It has no models or seeds of its own. Standalone descriptor
+checks and macro-example tests are not loaded or run in downstream projects.
+Installing the Python package with pip does not install these dbt resources.
 
 Add it to a pipeline repo's `packages.yml`:
 
 ```yaml
 packages:
-  - git: "https://github.com/NIH-NCPI/pipeline-utils.git"
+  - git: "https://github.com/carrollaboratory/dbt-pipeline-utils.git"
     revision: main  # pin to a tag/commit for anything beyond local testing
   - package: dbt-labs/dbt_utils   # required directly by some pipeline macros (e.g. combined_union)
     version: [">=1.1.0", "<2.0.0"]
@@ -335,7 +344,65 @@ packages:
 
 Then run `dbt deps` in the pipeline repo and call macros with the package's `name` from `dbt_project.yml` as the namespace, e.g. `{{ dbt_pipeline_utils.grant_devs_access(tag=..., users_role=...) }}`.
 
-dbt packages don't resolve transitive dependencies - if a macro here uses `dbt_utils`, the pipeline repo importing this package must also declare `dbt-labs/dbt_utils` in its own `packages.yml`, as shown above.
+This package does not declare `dbt_utils` as a dependency. Include
+`dbt-labs/dbt_utils` as shown above when using macros such as `combined_union`;
+the generic tests do not require it.
+
+### Using generic tests
+
+Reference tests with the `dbt_pipeline_utils` namespace in your pipeline's
+model YAML:
+
+```yaml
+version: 2
+
+models:
+  - name: participants
+    columns:
+      - name: website
+        data_tests:
+          - dbt_pipeline_utils.valid_http_uri
+      - name: external_id
+        data_tests:
+          - dbt_pipeline_utils.uri_or_curie_format
+          - dbt_pipeline_utils.valid_curie_prefix
+      - name: organism_type
+        data_tests:
+          - dbt_pipeline_utils.accepted_values_or_uri_or_curie:
+              arguments:
+                values: ["human", "mouse"]
+```
+
+The `arguments:` syntax requires dbt Core 1.10.5 or later; on older versions,
+put arguments such as `values` directly under the test name.
+
+Available tests: `valid_uri_format`, `valid_http_uri`, `valid_doi_format`,
+`curie_format`, `uri_or_curie_format`, `accepted_values_or_uri_or_curie`,
+and `valid_curie_prefix`. These tests skip nulls; add `not_null` separately
+where required. Regex validation supports PostgreSQL and DuckDB.
+
+`valid_curie_prefix` also requires a seed or model named `curie_prefixes`
+in your pipeline with a `prefix` column containing canonical prefix spellings.
+Override these with the test arguments `prefix_seed` and `prefix_column`.
+This package does not supply that seed.
+
+After adding tests, run `dbt deps`, then `dbt build --select participants`
+to build the model and run its tests.
+
+### Testing a local checkout
+
+Before publishing changes, replace the Git entry in your pipeline's
+`packages.yml` with a local dependency:
+
+```yaml
+packages:
+  - local: /absolute/path/to/dbt-pipeline-utils
+```
+
+Keep the `dbt_utils` entry too if your pipeline uses it. Run `dbt deps` again
+after switching dependencies. For Git installation, commit and push the
+macros and generic tests, pin `revision` to that published tag or commit,
+and run `dbt deps` in the consuming repo.
 
 ## Development
 
