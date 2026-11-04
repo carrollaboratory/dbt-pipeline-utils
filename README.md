@@ -48,6 +48,39 @@ Standalone, composable CLI tools for generating dbt files (`models.yml`, `source
 
 All generators accept DD inputs from local files/directories and/or GitHub release assets in memory. Use `-i` for local DD paths and `--release` for release assets.
 
+### Column description identifiers
+
+Model YAML generators use
+`<full_resolved_model_name>_<normalized_column_name>`. Source YAML generators
+use `<source_name>_<unprefixed_table_name>_<normalized_column_name>`, where
+`source_name` is the source block's `name` passed through `--source-name`
+(`SRC_SOURCE_NAME` in pipeline configuration), not its database schema.
+Both formats apply to `doc()` references and generated `{% docs %}` blocks.
+Resolved model/table names include `--table-prefix`
+and any explicit table-name override. Doc IDs are normalized to lowercase
+snake_case. IDs up to the project's 60-character cap are unchanged. Longer IDs
+keep their first 51 characters followed by `_` and an 8-character hash of the
+complete normalized ID. Both YAML references and docs blocks use the same
+shortened ID. Use unique resolved model/table names to namespace descriptions.
+
+For example, model `inc_brainpower_int_participants`, column `External ID`,
+uses `inc_brainpower_int_participants_external_id`.
+Source `inc_brainpower_raw`, unprefixed table `participants`, column
+`External ID`, uses `inc_brainpower_raw_participants_external_id`. The
+`--table-prefix` affects the YAML table name but not this doc ID. Keeping the
+unprefixed table name distinguishes columns with the same name in different
+source tables.
+
+When `--table-prefix` is used for source YAML, each table's `name` is prefixed
+for dbt references and its `identifier` remains the unprefixed table name from
+the data dictionary. For example, `inc_brainpowers_raw_participants` can use
+`identifier: participants` to resolve to the physical database table
+`participants`.
+
+Regenerate YAML and column docs together to update references.
+New blocks are appended; existing blocks, including old IDs and manually
+edited descriptions, are left untouched.
+
 ### generate_models_yml
 
 Builds/updates a dbt `models.yml` from DDs. Merge mode preserves stable ordering and produces clean diffs.
@@ -99,6 +132,7 @@ Generates one `<table>.sql` model per data dictionary, overwriting the previous 
 | `-p`, `--table-prefix` | No | `None` | Prefix output table/model names. |
 | `-f`, `--dd-format` | No | `ftd_dd` | Non-default DD column mapping. |
 | `--from-clause-template` | No | `None` | Emit `from` clauses (for example dbt `source(...)`) using `{table_name}` placeholder; `{base_name}` is the name without `--table-prefix`. |
+| `--program-ref-prefix` | No | `None` | Generate a configured projection using `generate_source_ref_from_current_model(prefix=...)`; `study_id` is cast to integer. |
 | `--reference-dir` | No | `None` | Deprecated and ignored; accepted for compatibility only. |
 | `--int-descriptors` | No | `False` | Create an empty table template with commented `*_id` columns, null values, and a null `<table>_descriptor` column. |
 | `--version-log` | No | `None` | Track DD version/hash changes per table. |
@@ -109,7 +143,7 @@ Generates one `<table>.sql` model per data dictionary, overwriting the previous 
 
 Use version control to review SQL changes between runs. Previously generated `_generated.sql` files are not automatically deleted.
 
-There's no notion of a "stage" baked into the code - int/exp/whatever are just different directories/output paths you choose per call. Use separate `just sql` invocations with different `DD_DIR`, `SQL_DIR`, `TABLE_PREFIX`, and `FROM_CLAUSE_TEMPLATE` values for multiple model sets.
+There's no notion of a "stage" baked into the code - int/exp/whatever are just different directories/output paths you choose per call. Use separate `just sql` invocations with different `DD_DIR`, `SQL_DIR`, `TABLE_PREFIX`, and `FROM_CLAUSE_TEMPLATE` values for multiple model sets. Use `--program-ref-prefix` for access projections that should derive a program `ref()` from the current model name.
 
 ### generate_src_models
 

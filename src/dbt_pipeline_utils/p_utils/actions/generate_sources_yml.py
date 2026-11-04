@@ -54,7 +54,9 @@ def main():
     )
     parser.add_argument(
         "-d", "--docs-output", default=None, type=Path,
-        help="Path to a _column_descriptions.md file to append doc blocks to.",
+        help="Path to a _column_descriptions.md file to append doc blocks to. "
+             "Doc IDs use the source name, unprefixed table name, and normalized column name, "
+             "with a short hash suffix for IDs over 60 characters.",
     )
     parser.add_argument(
         "--version-log", default=None, type=Path,
@@ -77,4 +79,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

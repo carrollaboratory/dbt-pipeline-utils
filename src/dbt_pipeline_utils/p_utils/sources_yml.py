@@ -25,12 +25,19 @@ from dbt_pipeline_utils.p_utils.models_yml import (
 )
 
 
-def build_source_table_entry(table_name: str, columns: list[dict]) -> tuple[dict, list[tuple[str, str]]]:
+def build_source_table_entry(
+    table_name: str,
+    columns: list[dict],
+    *,
+    source_name: str,
+    doc_table_name: str | None = None,
+) -> tuple[dict, list[tuple[str, str]]]:
     """
     Build one sources.yml table entry from columns produced by read_data_dictionary(),
     plus the (doc_id, description) doc blocks for those columns.
 
     Sources describe raw data, not modeled data, so no dbt tests are attached.
+    Doc IDs include the source name, unprefixed table name, and normalized column name.
     """
     column_entries = []
     doc_blocks = []
@@ -38,7 +45,10 @@ def build_source_table_entry(table_name: str, columns: list[dict]) -> tuple[dict
     for col in columns:
         col_code = col["formatted_variable_name"]
         doc_id = shorten_identifier(
-            normalize_name([table_name, col_code], extension="drop")
+            normalize_name(
+                [source_name, doc_table_name or table_name, col_code],
+                extension="drop",
+            )
         )
 
         column_entries.append(
@@ -55,6 +65,7 @@ def build_source_table_entry(table_name: str, columns: list[dict]) -> tuple[dict
 
     table = {
         "name": table_name,
+        "identifier": doc_table_name or table_name,
         "description": f"Source table for {table_name}.",
         "columns": column_entries,
     }
@@ -137,10 +148,16 @@ def generate_sources_yml(
     version_entries: list[tuple[str, dict]] = []
 
     for dd_filepath in dd_paths:
+        doc_table_name = _resolve_table_name(dd_filepath, table_names, None)
         table_name = _resolve_table_name(dd_filepath, table_names, table_prefix)
 
         columns = read_data_dictionary(dd_filepath, dd_format=dd_format)
-        table, doc_blocks = build_source_table_entry(table_name, columns)
+        table, doc_blocks = build_source_table_entry(
+            table_name,
+            columns,
+            source_name=source_name,
+            doc_table_name=doc_table_name,
+        )
 
         tables.append(table)
         all_doc_blocks.extend(doc_blocks)

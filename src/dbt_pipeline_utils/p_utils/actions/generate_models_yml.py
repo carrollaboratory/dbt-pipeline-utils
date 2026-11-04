@@ -46,7 +46,9 @@ def main():
     )
     parser.add_argument(
         "-d", "--docs-output", default=None, type=Path,
-        help="Path to a _column_descriptions.md file to append doc blocks to.",
+        help="Path to a _column_descriptions.md file to append doc blocks to. "
+             "Doc IDs use the resolved model name and normalized column name; "
+             "IDs over 60 characters end with a short hash.",
     )
     parser.add_argument(
         "--no-tests", action="store_true",
@@ -77,4 +79,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

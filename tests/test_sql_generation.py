@@ -91,6 +91,69 @@ class SQLGenerationTests(unittest.TestCase):
                 sql,
             )
 
+    def test_program_projection_uses_dynamic_program_ref_and_integer_study_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "activitydefinition_dd.csv"
+            source.write_text(
+                "variable_name,data_type\n"
+                "activity_definition_id,string\n"
+                "name,string\n"
+                "description,string\n"
+                "access_policy_id,string\n"
+                "study_id,string\n",
+                encoding="utf-8",
+            )
+            output = root / "models"
+
+            generate_sql_models(
+                source,
+                output,
+                table_prefix="kf_access",
+                program_ref_prefix="kf_program",
+            )
+
+            sql = (output / "kf_access_activitydefinition.sql").read_text(
+                encoding="utf-8"
+            )
+            self.assertEqual(
+                sql,
+                "{{ config(materialized='table') }}\n"
+                "{%- set program_ref = "
+                "generate_source_ref_from_current_model("
+                "prefix='kf_program') -%}\n\n"
+                "select\n"
+                '    activity_definition_id::text as "activity_definition_id",\n'
+                '    name::text as "name",\n'
+                '    description::text as "description",\n'
+                '    access_policy_id::text as "access_policy_id",\n'
+                '    study_id::integer as "study_id"\n'
+                "from {{ program_ref }}\n",
+            )
+
+    def test_int_descriptor_keeps_external_id_as_a_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "aliquot_dd.csv"
+            source.write_text(
+                "variable_name,data_type\n"
+                "aliquot_id,string\n"
+                "external_id,string\n"
+                "participant_external_id,string\n"
+                "sample_id,string\n",
+                encoding="utf-8",
+            )
+            output = root / "models"
+
+            generate_sql_models(source, output, int_descriptors=True)
+
+            sql = (output / "aliquot.sql").read_text(encoding="utf-8")
+            self.assertIn("-- null::text as aliquot_id,", sql)
+            self.assertIn("null::text as external_id,", sql)
+            self.assertIn("null::text as participant_external_id,", sql)
+            self.assertIn("-- null::text as sample_id,", sql)
+            self.assertIn("null::text as aliquot_descriptor", sql)
+
     def test_src_sql_preserves_source_names_and_normalizes_aliases(self):
         cases = [
             ("ID", "", '"ID"::text as id'),
@@ -150,6 +213,33 @@ class SQLGenerationTests(unittest.TestCase):
                                 (output / "patients.sql").read_text(encoding="utf-8"),
                                 expected,
                             )
+
+    def test_src_filename_prefix_is_independent_of_source_table_prefix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "bp_age_event_latency_dd.csv"
+            source.write_text(
+                "variable_name,data_type\niD,string\n",
+                encoding="utf-8",
+            )
+            output = root / "models"
+
+            generate_src_models(
+                source,
+                output,
+                source_name="inc_brainpower_raw",
+                table_prefix="inc_brainpowers_raw",
+                sql_file_prefix="inc_brainpowers_src",
+            )
+
+            sql = (output / "inc_brainpowers_src_bp_age_event_latency.sql").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                "source('inc_brainpower_raw', 'inc_brainpowers_raw_bp_age_event_latency')",
+                sql,
+            )
+            self.assertEqual(len(list(output.glob("*.sql"))), 1)
 
     def test_regular_sql_keeps_normalized_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:

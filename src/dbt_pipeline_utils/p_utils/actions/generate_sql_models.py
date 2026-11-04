@@ -57,6 +57,12 @@ def main():
         help="Create zero-row int table SQL with a null descriptor and commented-out ID columns.",
     )
     parser.add_argument(
+        "--program-ref-prefix",
+        default=None,
+        help="Generate a program-backed projection using "
+        "generate_source_ref_from_current_model(prefix=...).",
+    )
+    parser.add_argument(
         "--version-log",
         default=None,
         type=Path,
@@ -74,6 +80,7 @@ def main():
         reference_dir=args.reference_dir,
         version_log=args.version_log,
         int_descriptors=args.int_descriptors,
+        program_ref_prefix=args.program_ref_prefix,
     )
 
 
