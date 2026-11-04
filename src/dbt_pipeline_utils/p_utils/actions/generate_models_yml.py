@@ -55,6 +55,10 @@ def main():
         help="Skip generating dbt tests from the data dictionaries' tests column.",
     )
     parser.add_argument(
+        "--normalize-column-names", action="store_true",
+        help="Use normalized lowercase column names matching generated SQL models.",
+    )
+    parser.add_argument(
         "-m", "--mode", default="merge", choices=["create", "overwrite", "merge"],
         help="Write mode for the models.yml file (default: merge).",
     )
@@ -74,6 +78,7 @@ def main():
         include_tests=not args.no_tests,
         mode=args.mode,
         version_log=args.version_log,
+        normalize_column_names=args.normalize_column_names,
     )
 
 

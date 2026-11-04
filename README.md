@@ -93,6 +93,7 @@ Builds/updates a dbt `models.yml` from DDs. Merge mode preserves stable ordering
 | `-f`, `--dd-format` | No | `ftd_dd` | Use when DD columns follow a non-default mapping. |
 | `-d`, `--docs-output` | No | `None` | Append/update `_column_descriptions.md` docs blocks. |
 | `--no-tests` | No | `False` | Skip dbt test generation from DD `tests` column. |
+| `--normalize-column-names` | No | `False` | Use normalized lowercase column names matching generated SQL models instead of original DD names. |
 | `-m`, `--mode` | No | `merge` | `create` for first-time files, `overwrite` to replace file, `merge` for diff-friendly updates. |
 | `--version-log` | No | `None` | Track source/version/hash changes per model in a CSV over time. |
 | `--release REPO_URL ASSET_NAME` | No* | None | Pull DD assets from GitHub releases in memory (repeatable). |
@@ -101,6 +102,7 @@ Builds/updates a dbt `models.yml` from DDs. Merge mode preserves stable ordering
 | `--refresh` | No | `False` | Force fresh GitHub pull; otherwise in-process in-memory cache is used. |
 
 `*` You must provide at least one input source via `-i` or `--release`.
+Normalization fails if column names would become empty or collide within a model.
 
 ### generate_sources_yml
 
@@ -184,6 +186,7 @@ Single-asset convenience CLI for `models.yml` generation.
 | `-f`, `--dd-format` | No | `ftd_dd` | Non-default DD column mapping. |
 | `-d`, `--docs-output` | No | `None` | Append docs blocks. |
 | `--no-tests` | No | `False` | Skip test generation from DD tests column. |
+| `--normalize-column-names` | No | `False` | Use normalized lowercase column names matching generated SQL models. |
 | `-m`, `--mode` | No | `merge` | `create`, `overwrite`, or `merge`. |
 | `--version-log` | No | `None` | Append change rows to version log CSV. |
 
