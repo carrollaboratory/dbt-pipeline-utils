@@ -4,19 +4,15 @@ Standalone data-dictionary -> dbt SQL model generation.
 Same philosophy as models_yml.py/sources_yml.py: functions take explicit
 paths and plain values, with no dependency on a shared study/project config.
 
-Each dd produces one hand-editable SQL model file. That file is created once
-and never overwritten, since data devs harmonize it by hand afterwards.
-Alongside it, a "<table>_generated.sql" reference file is always (re)written
-with the current dd-derived SQL, so devs can diff the two to see exactly
-what's changed in the dd since the model was last harmonized:
-
-    diff models/int/patients.sql models/int/patients_generated.sql
+Each dd produces one SQL model file, replaced on every run with the current
+dd-derived SQL. No separate reference copies are written.
 """
 
 from collections.abc import Iterable
 from pathlib import Path
 import re
 
+from dbt_pipeline_utils import logger
 from dbt_pipeline_utils.p_utils.common import type_mapping
 from dbt_pipeline_utils.p_utils.files import normalize_name, write_file
 from dbt_pipeline_utils.p_utils.models_yml import (
@@ -56,13 +52,39 @@ def build_select_sql(columns: list[dict], *, from_clause: str | None = None) -> 
     return sql
 
 
+def build_program_projection_sql(
+    columns: list[dict], *, program_ref_prefix: str
+) -> str:
+    """Build a typed projection from the matching program model."""
+    column_defs = []
+    for col in columns:
+        alias = col["formatted_variable_name"]
+        data_type = (
+            "integer"
+            if alias == "study_id"
+            else type_mapping.get(col["data_type"], "text")
+        )
+        column_defs.append(f'{col["src_variable_name"]}::{data_type} as "{alias}"')
+
+    return (
+        "{{ config(materialized='table') }}\n"
+        "{%- set program_ref = "
+        "generate_source_ref_from_current_model("
+        f"prefix='{program_ref_prefix}') -%}}\n\n"
+        "select\n    "
+        + ",\n    ".join(column_defs)
+        + "\nfrom {{ program_ref }}"
+    )
+
+
 def build_int_descriptor_sql(
     columns: list[dict], *, dd_stem: str, from_clause: str | None = None
 ) -> str:
     lines = []
     for col in columns:
         name = col["formatted_variable_name"]
-        if name.endswith("_id"):
+        is_external_id = name == "external_id" or name.endswith("_external_id")
+        if name.endswith("_id") and not is_external_id:
             lines.append(f"    -- null::text as {name}, -- Global ID generated in the stb model")
         else:
             lines.append(f"    null::text as {name},")
@@ -87,7 +109,7 @@ def build_src_select_sql(
     """
     Build a src model SQL body that:
     - includes dbt config(materialized=...)
-    - selects every DD column
+    - selects every DD column using its original source name
     - casts every selected value to text (string)
     - aliases every output column to lower-snake
     - reads from source(source_name, table_name)
@@ -117,6 +139,7 @@ def generate_sql_models(
     table_prefix: str | None = None,
     version_log: Path | None = None,
     int_descriptors: bool = False,
+    program_ref_prefix: str | None = None,
 ) -> None:
     """
     Read any set of data dictionaries - a single file, a list of files, a
@@ -126,15 +149,18 @@ def generate_sql_models(
 
     If a directory is given, every "*_dd.*"/"*-dd.*" file in it is included.
 
-    Each model file (output_dir/<table_name>.sql) is created if missing and
-    never overwritten once it exists, since data devs hand-edit it to
-    harmonize the data. A "<table_name>_generated.sql" file next to it (or
-    under reference_dir, if given) is always (re)written with the current
-    dd-derived SQL - diff the two to see exactly what's changed in the dd
-    since the model was last harmonized.
+    Each model file (output_dir/<table_name>.sql) is replaced on every run,
+    including any manual edits. No separate reference copies are written.
+    reference_dir is deprecated and ignored.
 
     from_clause_template, if given, has the literal substring "{table_name}"
     replaced per dd, e.g. "{{ source('raw_study', '{table_name}') }}".
+    "{base_name}" is replaced with the table name without table_prefix, e.g.
+    "{{ ref('inc_program_{base_name}') }}" with table_prefix "inc_access"
+    -> "{{ ref('inc_program_accesspolicy') }}".
+    program_ref_prefix, if given, generates configured program-backed
+    projections using generate_source_ref_from_current_model and forces
+    study_id to integer.
 
     table_names optionally maps a dd file stem -> table name; any dd file not
     listed defaults to its normalized filename stem (with a trailing
@@ -149,22 +175,38 @@ def generate_sql_models(
     that table, so re-running against unchanged data doesn't grow the log.
     """
     output_dir = Path(output_dir)
-    reference_dir = Path(reference_dir) if reference_dir else output_dir
+    if program_ref_prefix and (int_descriptors or from_clause_template):
+        raise ValueError(
+            "program_ref_prefix cannot be combined with int_descriptors or "
+            "from_clause_template."
+        )
+    if reference_dir is not None:
+        logger.warning(
+            "reference_dir is deprecated and ignored; SQL models are overwritten "
+            "in output_dir without reference copies."
+        )
     table_names = table_names or {}
     version_entries: list[tuple[str, dict]] = []
 
     for dd_filepath in _resolve_dd_filepaths(dd_filepaths):
         table_name = _resolve_table_name(dd_filepath, table_names, table_prefix)
+        base_name = _resolve_table_name(dd_filepath, table_names, None)
 
         from_clause = (
-            from_clause_template.replace("{table_name}", table_name)
+            from_clause_template.replace("{table_name}", table_name).replace(
+                "{base_name}", base_name
+            )
             if from_clause_template
             else None
         )
 
         columns = read_data_dictionary(dd_filepath, dd_format=dd_format)
         sql = (
-            build_int_descriptor_sql(
+            build_program_projection_sql(
+                columns, program_ref_prefix=program_ref_prefix
+            )
+            if program_ref_prefix
+            else build_int_descriptor_sql(
                 columns,
                 dd_stem=dd_filepath.stem if hasattr(dd_filepath, "stem") else Path(dd_filepath).stem,
                 from_clause=from_clause,
@@ -173,12 +215,6 @@ def generate_sql_models(
             else build_select_sql(columns, from_clause=from_clause)
         ) + "\n"
 
-        reference_filepath = reference_dir / f"{table_name}_generated.sql"
-        reference_filepath.parent.mkdir(parents=True, exist_ok=True)
-        reference_filepath.write_text(sql, encoding="utf-8")
-
-        # write_file() never overwrites an existing *.sql file - the dev's
-        # harmonized model is left untouched once it exists.
         write_file(output_dir / f"{table_name}.sql", sql)
 
         if version_log:
@@ -205,13 +241,15 @@ def generate_src_models(
 
     Each model:
     - includes config(materialized='table')
-    - selects every DD column
+    - selects each column using src_variable_name when specified, otherwise
+      the original variable_name from the DD
     - casts every value to text
     - aliases every output column to lower-snake
     - includes from {{ source(source_name, table_name) }}
 
     table_prefix affects the table_name used in source(...).
-    sql_file_prefix affects only the generated SQL filename.
+    sql_file_prefix prefixes the unprefixed DD table name in the generated
+    SQL filename, independently of table_prefix.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -219,8 +257,11 @@ def generate_src_models(
     version_entries: list[tuple[str, dict]] = []
 
     for dd_filepath in _resolve_dd_filepaths(dd_filepaths):
+        base_table_name = _resolve_table_name(dd_filepath, table_names, None)
         table_name = _resolve_table_name(dd_filepath, table_names, table_prefix)
-        columns = read_data_dictionary(dd_filepath, dd_format=dd_format)
+        columns = read_data_dictionary(
+            dd_filepath, dd_format=dd_format, source_fallback_to_original=True
+        )
         sql = (
             build_src_select_sql(
                 columns,
@@ -232,7 +273,7 @@ def generate_src_models(
         )
 
         model_name = (
-            normalize_name([sql_file_prefix, table_name], extension="drop")
+            normalize_name([sql_file_prefix, base_table_name], extension="drop")
             if sql_file_prefix
             else table_name
         )

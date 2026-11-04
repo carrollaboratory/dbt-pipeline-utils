@@ -3,7 +3,7 @@ CLI: generate src dbt SQL models from DD inputs.
 
 For each data dictionary, writes one SQL model that:
 - includes config(materialized='table')
-- selects every DD column
+- selects each DD column using its original source name
 - casts every selected value to text
 - aliases every output column to lower-snake
 - uses source(source_name, table_name) in the from clause
@@ -20,7 +20,7 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Generate one src SQL model per DD with source(...), lower-snake aliases, "
-            "and cast-all-to-text behavior."
+            "original source column names, and cast-all-to-text behavior."
         )
     )
     parser.add_argument(

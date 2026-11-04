@@ -1,0 +1,35 @@
+version: 2
+
+data_tests:
+  - name: normalize_descriptors_examples__passes
+    description: |
+      Validates normalize_descriptors expected behavior across representative
+      examples (whitespace cleanup, delimiter escaping, case-preserving defaults,
+      and override handling).
+    config:
+      severity: error
+      tags:
+        - unit_test
+        - macros
+        - normalize_descriptors
+
+  - name: uri_curie_patterns_examples__passes
+    description: |
+      Validates uri_curie_patterns() accepts/rejects representative URI, HTTP URI,
+      CURIE, and CURIE prefix values on the current adapter (postgres / duckdb).
+    config:
+      severity: error
+      tags:
+        - unit_test
+        - macros
+        - uri_curie
+
+  - name: source_identifier_uri_examples__passes
+    description: |
+      Validates source_identifier_uri trims, percent-encodes, and nulls blank ids.
+    config:
+      severity: error
+      tags:
+        - unit_test
+        - macros
+        - uri_curie

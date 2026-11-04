@@ -7,10 +7,11 @@ repositories. It provides:
   dictionaries.
 - dbt macros for common pipeline tasks, including schema naming, descriptor
   normalization, combined models, and grants.
+- Reusable dbt generic tests for URI, CURIE, and DOI validation.
 
 The package does not provide dbt models of its own. Use the Python tools
 independently to generate project files, and install the dbt package when you
-want to use its macros.
+want to use its macros and generic tests.
 
 ## Installation
 
@@ -36,6 +37,8 @@ To work on a local checkout, install it in editable mode:
 ```bash
 git clone https://github.com/carrollaboratory/dbt-pipeline-utils.git
 cd dbt-pipeline-utils
+pip install -e .
+```
 
 # pipeline-utils
 
@@ -44,6 +47,39 @@ Standalone, composable CLI tools for generating dbt files (`models.yml`, `source
 ## Commands
 
 All generators accept DD inputs from local files/directories and/or GitHub release assets in memory. Use `-i` for local DD paths and `--release` for release assets.
+
+### Column description identifiers
+
+Model YAML generators use
+`<full_resolved_model_name>_<normalized_column_name>`. Source YAML generators
+use `<source_name>_<unprefixed_table_name>_<normalized_column_name>`, where
+`source_name` is the source block's `name` passed through `--source-name`
+(`SRC_SOURCE_NAME` in pipeline configuration), not its database schema.
+Both formats apply to `doc()` references and generated `{% docs %}` blocks.
+Resolved model/table names include `--table-prefix`
+and any explicit table-name override. Doc IDs are normalized to lowercase
+snake_case. IDs up to the project's 60-character cap are unchanged. Longer IDs
+keep their first 51 characters followed by `_` and an 8-character hash of the
+complete normalized ID. Both YAML references and docs blocks use the same
+shortened ID. Use unique resolved model/table names to namespace descriptions.
+
+For example, model `inc_brainpower_int_participants`, column `External ID`,
+uses `inc_brainpower_int_participants_external_id`.
+Source `inc_brainpower_raw`, unprefixed table `participants`, column
+`External ID`, uses `inc_brainpower_raw_participants_external_id`. The
+`--table-prefix` affects the YAML table name but not this doc ID. Keeping the
+unprefixed table name distinguishes columns with the same name in different
+source tables.
+
+When `--table-prefix` is used for source YAML, each table's `name` is prefixed
+for dbt references and its `identifier` remains the unprefixed table name from
+the data dictionary. For example, `inc_brainpowers_raw_participants` can use
+`identifier: participants` to resolve to the physical database table
+`participants`.
+
+Regenerate YAML and column docs together to update references.
+New blocks are appended; existing blocks, including old IDs and manually
+edited descriptions, are left untouched.
 
 ### generate_models_yml
 
@@ -57,6 +93,7 @@ Builds/updates a dbt `models.yml` from DDs. Merge mode preserves stable ordering
 | `-f`, `--dd-format` | No | `ftd_dd` | Use when DD columns follow a non-default mapping. |
 | `-d`, `--docs-output` | No | `None` | Append/update `_column_descriptions.md` docs blocks. |
 | `--no-tests` | No | `False` | Skip dbt test generation from DD `tests` column. |
+| `--normalize-column-names` | No | `False` | Use normalized lowercase column names matching generated SQL models instead of original DD names. |
 | `-m`, `--mode` | No | `merge` | `create` for first-time files, `overwrite` to replace file, `merge` for diff-friendly updates. |
 | `--version-log` | No | `None` | Track source/version/hash changes per model in a CSV over time. |
 | `--release REPO_URL ASSET_NAME` | No* | None | Pull DD assets from GitHub releases in memory (repeatable). |
@@ -65,6 +102,7 @@ Builds/updates a dbt `models.yml` from DDs. Merge mode preserves stable ordering
 | `--refresh` | No | `False` | Force fresh GitHub pull; otherwise in-process in-memory cache is used. |
 
 `*` You must provide at least one input source via `-i` or `--release`.
+Normalization fails if column names would become empty or collide within a model.
 
 ### generate_sources_yml
 
@@ -87,16 +125,17 @@ Builds/updates a dbt `sources.yml` block from DDs with the same merge semantics.
 
 ### generate_sql_models
 
-Generates dev-owned model SQL plus always-refreshed `_generated.sql` reference files.
+Generates one `<table>.sql` model per data dictionary, overwriting the previous file on every run, including manual edits. No `_generated.sql` reference files are created.
 
 | Argument | Required | Default | When to use |
 |---|---|---|---|
 | `-i`, `--dd-filepaths` | No* | `[]` | Local DD files/directories. |
-| `-o`, `--output-dir` | Yes | None | Directory for hand-edited `<table>.sql` files. |
+| `-o`, `--output-dir` | Yes | None | Directory for `<table>.sql` files, replaced on every run. |
 | `-p`, `--table-prefix` | No | `None` | Prefix output table/model names. |
 | `-f`, `--dd-format` | No | `ftd_dd` | Non-default DD column mapping. |
-| `--from-clause-template` | No | `None` | Emit `from` clauses (for example dbt `source(...)`) using `{table_name}` placeholder. |
-| `--reference-dir` | No | Same as `--output-dir` | Write refreshed `<table>_generated.sql` files to a separate directory. |
+| `--from-clause-template` | No | `None` | Emit `from` clauses (for example dbt `source(...)`) using `{table_name}` placeholder; `{base_name}` is the name without `--table-prefix`. |
+| `--program-ref-prefix` | No | `None` | Generate a configured projection using `generate_source_ref_from_current_model(prefix=...)`; `study_id` is cast to integer. |
+| `--reference-dir` | No | `None` | Deprecated and ignored; accepted for compatibility only. |
 | `--int-descriptors` | No | `False` | Create an empty table template with commented `*_id` columns, null values, and a null `<table>_descriptor` column. |
 | `--version-log` | No | `None` | Track DD version/hash changes per table. |
 | `--release REPO_URL ASSET_NAME` | No* | None | Use release DD asset(s) in memory. |
@@ -104,13 +143,13 @@ Generates dev-owned model SQL plus always-refreshed `_generated.sql` reference f
 | `--release-token` | No | `None` | Private repo auth. |
 | `--refresh` | No | `False` | Force fresh pull instead of in-memory cache. |
 
-Example diff workflow:
+Use version control to review SQL changes between runs. Previously generated `_generated.sql` files are not automatically deleted.
 
-```bash
-diff models/int/patients.sql models/int/patients_generated.sql
-```
+There's no notion of a "stage" baked into the code - int/exp/whatever are just different directories/output paths you choose per call. Use separate `just sql` invocations with different `DD_DIR`, `SQL_DIR`, `TABLE_PREFIX`, and `FROM_CLAUSE_TEMPLATE` values for multiple model sets. Use `--program-ref-prefix` for access projections that should derive a program `ref()` from the current model name.
 
-There's no notion of a "stage" baked into the code - int/exp/whatever are just different directories/output paths you choose per call. Use separate `just sql` invocations with different `DD_DIR`, `SQL_DIR`, `TABLE_PREFIX`, and `FROM_CLAUSE_TEMPLATE` values for multiple model sets.
+### generate_src_models
+
+Src SQL selects the original, case-preserved DD column name and aliases it to lowercase snake_case (for example, `ID` becomes `"ID"::text as id`). A nonempty `src_variable_name` takes precedence as the source column name. Existing SQL files are overwritten.
 
 ## Release-backed Inputs
 
@@ -147,6 +186,7 @@ Single-asset convenience CLI for `models.yml` generation.
 | `-f`, `--dd-format` | No | `ftd_dd` | Non-default DD column mapping. |
 | `-d`, `--docs-output` | No | `None` | Append docs blocks. |
 | `--no-tests` | No | `False` | Skip test generation from DD tests column. |
+| `--normalize-column-names` | No | `False` | Use normalized lowercase column names matching generated SQL models. |
 | `-m`, `--mode` | No | `merge` | `create`, `overwrite`, or `merge`. |
 | `--version-log` | No | `None` | Append change rows to version log CSV. |
 
@@ -319,15 +359,21 @@ just -f justfile.access RELEASE_REPO=kf \
 
 For non-GitHub-release sources, a project-specific importer can still be supplied via `DDS_PULL_COMMAND` and run with `just DDS_PULL_COMMAND='...' pull-dd` to populate `DD_DIR` before generation.
 
-## Shared dbt macros
+## Shared dbt macros and generic tests
 
-This repo is itself importable as a dbt package, so macros in [`macros/`](macros/) (`grants/`, `ad_hoc/`, `pipeline/`) can be reused across pipeline repos instead of copy-pasted into each one. It has no models/seeds of its own - `dbt_project.yml` only declares `macro-paths`.
+This repo is importable as a dbt package. It exports [`macros/`](macros/)
+through `macro-paths`. The dependent URI/CURIE macros, regex helpers, and
+generic tests are grouped in
+[`uri_curie.sql`](macros/uri_curie/uri_curie.sql); their public names and
+arguments are unchanged. It has no models or seeds of its own. Standalone descriptor
+checks and macro-example tests are not loaded or run in downstream projects.
+Installing the Python package with pip does not install these dbt resources.
 
 Add it to a pipeline repo's `packages.yml`:
 
 ```yaml
 packages:
-  - git: "https://github.com/NIH-NCPI/pipeline-utils.git"
+  - git: "https://github.com/carrollaboratory/dbt-pipeline-utils.git"
     revision: main  # pin to a tag/commit for anything beyond local testing
   - package: dbt-labs/dbt_utils   # required directly by some pipeline macros (e.g. combined_union)
     version: [">=1.1.0", "<2.0.0"]
@@ -335,7 +381,65 @@ packages:
 
 Then run `dbt deps` in the pipeline repo and call macros with the package's `name` from `dbt_project.yml` as the namespace, e.g. `{{ dbt_pipeline_utils.grant_devs_access(tag=..., users_role=...) }}`.
 
-dbt packages don't resolve transitive dependencies - if a macro here uses `dbt_utils`, the pipeline repo importing this package must also declare `dbt-labs/dbt_utils` in its own `packages.yml`, as shown above.
+This package does not declare `dbt_utils` as a dependency. Include
+`dbt-labs/dbt_utils` as shown above when using macros such as `combined_union`;
+the generic tests do not require it.
+
+### Using generic tests
+
+Reference tests with the `dbt_pipeline_utils` namespace in your pipeline's
+model YAML:
+
+```yaml
+version: 2
+
+models:
+  - name: participants
+    columns:
+      - name: website
+        data_tests:
+          - dbt_pipeline_utils.valid_http_uri
+      - name: external_id
+        data_tests:
+          - dbt_pipeline_utils.uri_or_curie_format
+          - dbt_pipeline_utils.valid_curie_prefix
+      - name: organism_type
+        data_tests:
+          - dbt_pipeline_utils.accepted_values_or_uri_or_curie:
+              arguments:
+                values: ["human", "mouse"]
+```
+
+The `arguments:` syntax requires dbt Core 1.10.5 or later; on older versions,
+put arguments such as `values` directly under the test name.
+
+Available tests: `valid_uri_format`, `valid_http_uri`, `valid_doi_format`,
+`curie_format`, `uri_or_curie_format`, `accepted_values_or_uri_or_curie`,
+and `valid_curie_prefix`. These tests skip nulls; add `not_null` separately
+where required. Regex validation supports PostgreSQL and DuckDB.
+
+`valid_curie_prefix` also requires a seed or model named `curie_prefixes`
+in your pipeline with a `prefix` column containing canonical prefix spellings.
+Override these with the test arguments `prefix_seed` and `prefix_column`.
+This package does not supply that seed.
+
+After adding tests, run `dbt deps`, then `dbt build --select participants`
+to build the model and run its tests.
+
+### Testing a local checkout
+
+Before publishing changes, replace the Git entry in your pipeline's
+`packages.yml` with a local dependency:
+
+```yaml
+packages:
+  - local: /absolute/path/to/dbt-pipeline-utils
+```
+
+Keep the `dbt_utils` entry too if your pipeline uses it. Run `dbt deps` again
+after switching dependencies. For Git installation, commit and push the
+macros and generic tests, pin `revision` to that published tag or commit,
+and run `dbt deps` in the consuming repo.
 
 ## Development
 

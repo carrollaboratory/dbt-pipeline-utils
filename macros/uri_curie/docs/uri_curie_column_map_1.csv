@@ -1,0 +1,44 @@
+table,column,type,source_data,source_data (prepped for macro),harmonized,macro,tests
+accesspolicy,data_use_accession,uriorcurie,,DBGAP:phs000000,DBGAP:phs000000,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+accesspolicy,website,uri,,example.org/study/1234,https://example.org/study/1234,normalize_http_uri('{website_column_here}'),valid_http_uri
+study,website,uri,,http://example.org/study/11111,http://example.org/study/11111,normalize_http_uri('{website_column_here}'),valid_http_uri
+virtualbiorepository,website,uri,,HTTPS://example.org/vbr/22222,https://example.org/vbr/22222,normalize_http_uri('{website_column_here}'),valid_http_uri
+publication,website,uri,,https://example.org/publication/1234,https://example.org/publication/1234,normalize_http_uri('{website_column_here}'),valid_http_uri
+study,program,uriorcurie | EnumProgram,,https://example.org/program/1234,https://example.org/program/1234,none,"accepted_values_or_uri_or_curie, valid_curie_prefix"
+study,do_id,DOI (string),,10.5072/example.11111,10.5072/example.11111,normalize_doi('{doi_column_here}'),valid_doi_format
+dataset,do_id,DOI (string),,10.5072/example.22222,10.5072/example.22222,normalize_doi('{doi_column_here}'),valid_doi_format
+study,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/Study/11111,https://example.org/cam-testdata/tiny/Study/11111,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+studymetadata,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/StudyMetadata/22222,https://example.org/cam-testdata/tiny/StudyMetadata/22222,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+virtualbiorepository,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/VirtualBiorepository/1234,https://example.org/cam-testdata/tiny/VirtualBiorepository/1234,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+doi,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/DOI/11111,https://example.org/cam-testdata/tiny/DOI/11111,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+investigator,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/Investigator/22222,https://example.org/cam-testdata/tiny/Investigator/22222,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+publication,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/Publication/1234,https://example.org/cam-testdata/tiny/Publication/1234,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+subject,external_id,uriorcurie,,1234,https://identifier.includedcc.org/source/sd-aaaaaaaaaa/1234,"source_identifier_uri('{source_id_column_here}', '{study_global_id_here}')",uri_or_curie_format
+demographics,external_id,uriorcurie,,1234,https://identifier.includedcc.org/source/sd-aaaaaaaaaa/1234,"source_identifier_uri('{source_id_column_here}', '{study_global_id_here}')",uri_or_curie_format
+family,external_id,uriorcurie,gr-gm96zwr6qd,,https://identifier.includedcc.org/source/sd-aaaaaaaaaa/gr-gm96zwr6qd,"source_identifier_uri('{family_global_id_column_here}', '{study_global_id_here}')",uri_or_curie_format
+familyrelationship,external_id,uriorcurie,fm-7n5m7c64u3,https://example.org/cam-testdata/tiny/FamilyRelationship/fm-7n5m7c64u3,https://example.org/cam-testdata/tiny/FamilyRelationship/fm-7n5m7c64u3,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+familymembership,external_id,uriorcurie,fmb-e6elokv6qd,https://example.org/cam-testdata/tiny/FamilyMembership/fmb-e6elokv6qd,https://example.org/cam-testdata/tiny/FamilyMembership/fmb-e6elokv6qd,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+subjectassertion,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/SubjectAssertion/22222,https://example.org/cam-testdata/tiny/SubjectAssertion/22222,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+sample,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/Sample/1234,https://example.org/cam-testdata/tiny/Sample/1234,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+biospecimencollection,external_id,uriorcurie,,11111,https://identifier.includedcc.org/source/sd-aaaaaaaaaa/11111,"source_identifier_uri('{source_id_column_here}', '{study_global_id_here}')",uri_or_curie_format
+aliquot,external_id,uriorcurie,,22222,https://identifier.includedcc.org/source/sd-aaaaaaaaaa/22222,"source_identifier_uri('{source_id_column_here}', '{study_global_id_here}')",uri_or_curie_format
+encounter,external_id,uriorcurie,,1234 11111,https://identifier.includedcc.org/source/sd-aaaaaaaaaa/1234%2011111,"source_identifier_uri('{composite_source_id_expression_here}', '{study_global_id_here}')",uri_or_curie_format
+encounterdefinition,external_id,uriorcurie,,A123,https://identifier.includedcc.org/source/sd-aaaaaaaaaa/A123,"source_identifier_uri('{source_id_column_here}', '{study_global_id_here}')",uri_or_curie_format
+activitydefinition,external_id,uriorcurie,,A222,https://identifier.includedcc.org/source/sd-aaaaaaaaaa/A222,"source_identifier_uri('{source_id_column_here}', '{study_global_id_here}')",uri_or_curie_format
+file,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/File/11111,https://example.org/cam-testdata/tiny/File/11111,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+assay,external_id,uriorcurie,,https://example.org/cam-testdata/tiny/Assay/22222,https://example.org/cam-testdata/tiny/Assay/22222,normalize_curie('{external_id_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+subject,organism_type,uriorcurie | EnumOrganism,,NCBITaxon:11111,NCBITaxon:11111,normalize_curie('{organism_curie_column_here}'),"accepted_values_or_uri_or_curie, valid_curie_prefix"
+family,family_study_focus,uriorcurie,,MONDO:22222,MONDO:22222,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+concept,concept_curie,uriorcurie,,HP:11111,HP:11111,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+synonym,concept_curie,uriorcurie,,HP:11111,HP:11111,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+conceptrelationship,concept_curie,uriorcurie,,MONDO:22222,MONDO:22222,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+conceptrelationship,relationship_curie,uriorcurie,,KIN:1234,KIN:1234,normalize_curie('{relationship_curie_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+conceptrelationship,target_concept_curie,Concept,,NCIT:A123,NCIT:A123,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+sample,sample_type,uriorcurie,,UBERON:11111,UBERON:11111,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+sample,processing,uriorcurie,,OBI:11111,OBI:11111,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+sample,storage_method,uriorcurie,,OBI:22222,OBI:22222,normalize_curie('{curie_code_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+file,internal_uri,uriorcurie,,s3://example-bucket/path/file-1234.cram,s3://example-bucket/path/file-1234.cram,normalize_curie('{uri_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+file,release_uri,uriorcurie,,s3://example-bucket/release/file-11111.cram,s3://example-bucket/release/file-11111.cram,normalize_curie('{uri_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+file,drs_uri,uriorcurie,,drs://example.org/22222,drs://example.org/22222,normalize_curie('{uri_column_here}'),"uri_or_curie_format, valid_curie_prefix"
+vocabulary,vocabulary_uri,uri,,https://example.org/vocabulary/11111,https://example.org/vocabulary/11111,normalize_http_uri('{vocabulary_uri_column_here}'),valid_uri_format
+vocabulary,fhir_system,uri,,urn:uuid:11111111-1111-1111-1111-111111111111,urn:uuid:11111111-1111-1111-1111-111111111111,normalize_http_uri('{fhir_system_column_here}'),valid_uri_format

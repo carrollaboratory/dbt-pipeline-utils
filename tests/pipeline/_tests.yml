@@ -1,0 +1,21 @@
+version: 2
+
+data_tests:
+  - name: descriptors_view_validation
+    description: |
+        Enforces a shared contract for all project models ending in `_descriptors`.
+
+        Contract checks:
+        - required columns exist: studyglobalid, fhirresourcetype, descriptor, descriptorstate
+        - required columns are not null
+        - studyglobalid matches '^sd-[a-z0-9]{10}$'
+        - fhirresourcetype is one of expected_resources
+
+        Example test command:
+        dbt test --select path:tests/pipeline/descriptors_view_validation.sql --store-failures
+
+        Example show commands:
+        dbt show --select path:tests/pipeline/descriptors_view_validation.sql
+        
+        dbt show --inline "select * from includewarehouse.bg_dev_dbt_test__audit.descriptors_view_validation"
+

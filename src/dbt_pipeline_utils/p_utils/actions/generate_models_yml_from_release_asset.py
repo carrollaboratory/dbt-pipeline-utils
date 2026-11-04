@@ -66,11 +66,17 @@ def main():
     )
     parser.add_argument(
         "-d", "--docs-output", default=None, type=Path,
-        help="Path to a _column_descriptions.md file to append doc blocks to.",
+        help="Path to a _column_descriptions.md file to append doc blocks to. "
+             "Doc IDs use the resolved model name and normalized column name; "
+             "IDs over 60 characters end with a short hash.",
     )
     parser.add_argument(
         "--no-tests", action="store_true",
         help="Skip generating dbt tests from the data dictionary's tests column.",
+    )
+    parser.add_argument(
+        "--normalize-column-names", action="store_true",
+        help="Use normalized lowercase column names matching generated SQL models.",
     )
     parser.add_argument(
         "-m", "--mode", default="merge", choices=["create", "overwrite", "merge"],
@@ -97,6 +103,7 @@ def main():
         include_tests=not args.no_tests,
         mode=args.mode,
         version_log=args.version_log,
+        normalize_column_names=args.normalize_column_names,
     )
 
 

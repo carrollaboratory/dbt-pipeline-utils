@@ -37,7 +37,12 @@ def _as_str_or_none(value):
     return None if value is None or pd.isna(value) else str(value)
 
 
-def _extract_columns(df: pd.DataFrame, dd_format: str) -> list[dict]:
+def _extract_columns(
+    df: pd.DataFrame,
+    dd_format: str,
+    *,
+    source_fallback_to_original: bool = False,
+) -> list[dict]:
     """Shared column-extraction logic for both file-based and in-memory data dictionaries."""
     if dd_format not in DD_FORMATS:
         raise ValueError(
@@ -59,9 +64,12 @@ def _extract_columns(df: pd.DataFrame, dd_format: str) -> list[dict]:
 
         formatted_variable_name = normalize_name(variable_name, extension="drop")
 
+        source_fallback = (
+            variable_name if source_fallback_to_original else formatted_variable_name
+        )
         src_variable_name = _as_str_or_none(
-            row.get(column_map.get("src_variable_name"), formatted_variable_name)
-        ) or formatted_variable_name
+            row.get(column_map.get("src_variable_name"), source_fallback)
+        ) or source_fallback
 
         columns.append(
             {
@@ -79,13 +87,20 @@ def _extract_columns(df: pd.DataFrame, dd_format: str) -> list[dict]:
     return columns
 
 
-def read_data_dictionary(dd_source: DDSource, dd_format: str = "ftd_dd") -> list[dict]:
+def read_data_dictionary(
+    dd_source: DDSource,
+    dd_format: str = "ftd_dd",
+    *,
+    source_fallback_to_original: bool = False,
+) -> list[dict]:
     """
     Read a single data dictionary - a file path (csv/xlsx) or an
     InMemoryDataDictionary - and return one dict per column.
 
     dd_format selects the column-name mapping to use (see DD_FORMATS in common.py),
     e.g. "ftd_dd", "src_type1", "pipeline_format".
+    When source_fallback_to_original is True, a missing src_variable_name
+    falls back to the original variable_name rather than the normalized name.
     """
     if isinstance(dd_source, InMemoryDataDictionary):
         suffix = dd_source.suffix.lower()
@@ -105,7 +120,9 @@ def read_data_dictionary(dd_source: DDSource, dd_format: str = "ftd_dd") -> list
     else:
         df = read_file(Path(dd_source))
 
-    return _extract_columns(df, dd_format)
+    return _extract_columns(
+        df, dd_format, source_fallback_to_original=source_fallback_to_original
+    )
 
 
 def build_model_entry(
@@ -113,6 +130,7 @@ def build_model_entry(
     columns: list[dict],
     *,
     include_tests: bool = True,
+    normalize_column_names: bool = False,
 ) -> tuple[dict, list[tuple[str, str]]]:
     """
     Build one dbt models.yml model entry from columns produced by read_data_dictionary(),
@@ -120,15 +138,28 @@ def build_model_entry(
     """
     column_entries = []
     doc_blocks = []
+    seen_column_names: set[str] = set()
 
     for col in columns:
         col_code = col["formatted_variable_name"]
+        if normalize_column_names:
+            if not col_code:
+                raise ValueError(
+                    f"Column {col['variable_name']!r} in model {table_name!r} "
+                    "normalizes to an empty name."
+                )
+            if col_code in seen_column_names:
+                raise ValueError(
+                    f"Duplicate normalized column name {col_code!r} "
+                    f"in model {table_name!r}."
+                )
+            seen_column_names.add(col_code)
         doc_id = shorten_identifier(
             normalize_name([table_name, col_code], extension="drop")
         )
 
         entry = {
-            "name": col["variable_name"],
+            "name": col_code if normalize_column_names else col["variable_name"],
             "description": f'{{{{ doc("{doc_id}") }}}}',
         }
 
@@ -250,6 +281,7 @@ def generate_models_yml(
     include_tests: bool = True,
     mode: str = "merge",
     version_log: Path | None = None,
+    normalize_column_names: bool = False,
 ) -> None:
     """
     Read any set of data dictionaries - a single file, a list of files, a
@@ -269,6 +301,9 @@ def generate_models_yml(
     given, is prepended to every resulting table name (e.g. table_prefix
     "inc_access" + table name "accesspolicy" -> "inc_access_accesspolicy").
 
+    normalize_column_names uses the same normalized column names as generated
+    SQL models instead of preserving the names from the data dictionary.
+
     version_log, if given, appends one row per model to a CSV at that path
     recording where its data came from (source/version/asset/content hash) -
     but only when that information differs from the last recorded row for
@@ -285,7 +320,10 @@ def generate_models_yml(
         table_name = _resolve_table_name(dd_filepath, table_names, table_prefix)
 
         columns = read_data_dictionary(dd_filepath, dd_format=dd_format)
-        model, doc_blocks = build_model_entry(table_name, columns, include_tests=include_tests)
+        model, doc_blocks = build_model_entry(
+            table_name, columns, include_tests=include_tests,
+            normalize_column_names=normalize_column_names,
+        )
 
         models.append(model)
         all_doc_blocks.extend(doc_blocks)
@@ -316,6 +354,7 @@ def generate_models_yml_from_release_asset(
     include_tests: bool = True,
     mode: str = "merge",
     version_log: Path | None = None,
+    normalize_column_names: bool = False,
 ) -> None:
     """
     Pull one named DD file directly from a GitHub release asset (e.g. a
@@ -349,6 +388,7 @@ def generate_models_yml_from_release_asset(
         include_tests=include_tests,
         mode=mode,
         version_log=version_log,
+        normalize_column_names=normalize_column_names,
     )
 
 
