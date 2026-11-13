@@ -283,7 +283,7 @@ For non-GitHub-release sources, a project-specific importer can still be supplie
 
 ## Shared dbt macros
 
-This repo is itself importable as a dbt package, so macros in [`macros/`](macros/) (`grants/`, `ad_hoc/`, `pipeline/`) can be reused across pipeline repos instead of copy-pasted into each one. It has no models/seeds of its own - `dbt_project.yml` only declares `macro-paths`.
+This repo is itself importable as a dbt package, so macros in [`macros/`](macros/) (`identifiers/`, `profiling/`, `warehouse_naming/`, `uri_curie/`, `grants/`, `observability/`) can be reused across pipeline repos instead of copy-pasted into each one. It has no models/seeds of its own - `dbt_project.yml` only declares `macro-paths`.
 
 Add it to a pipeline repo's `packages.yml`:
 
@@ -291,7 +291,7 @@ Add it to a pipeline repo's `packages.yml`:
 packages:
   - git: "https://github.com/NIH-NCPI/pipeline-utils.git"
     revision: main  # pin to a tag/commit for anything beyond local testing
-  - package: dbt-labs/dbt_utils   # required directly by some pipeline macros (e.g. combined_union)
+  - package: dbt-labs/dbt_utils   # required by the profile_* macros
     version: [">=1.1.0", "<2.0.0"]
 ```
 

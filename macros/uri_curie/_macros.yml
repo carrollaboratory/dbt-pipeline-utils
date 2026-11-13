@@ -40,15 +40,14 @@ macros:
       Example:
         normalize_curie('dbgap', default_prefix='dbgap')
 
-  - name: source_identifier_uri
+  - name: identifier_uri
     description: |
-      SQL expression that mints a URI for a study-local source id (participant,
-      sample barcode, family id, ...) that has no external definition:
-        https://identifier.includedcc.org/source/{study_id}/{encoded id}
+      SQL expression that mints a URI for a local id (participant, sample,
+      family, ...) that has no external definition: <base_uri>/<encoded id>.
       Trims the id, percent-encodes % space / ? #, and returns null for blank ids.
-      study_id must be the Dewrangle study id (sd-xxxxxxxxxx).
+      A trailing slash on base_uri is ignored.
       Example:
-        source_identifier_uri('id', 'sd-dbaknypgqp') as external_id
+        identifier_uri('participant_id', 'https://identifier.example.org/source/study_a') as external_id
 
   - name: normalize_http_uri
     description: |

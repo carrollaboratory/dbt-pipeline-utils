@@ -1,0 +1,13 @@
+version: 2
+
+macros:
+  - name: schema_name_from_path
+    description: |
+      Builds a schema name from the model's folder path. Packages cannot
+      override generate_schema_name, so a pipeline keeps a one-line
+      generate_schema_name wrapper that returns this macro's result.
+        - explicit +schema config: <target.schema>_<custom_schema_name>
+        - seeds: <target.schema>
+        - models/<a>/x.sql: <target.schema>_<a>
+        - models/<a>/<b>/<layer>/x.sql: <target.schema>_<a>_<b> (last folder dropped)
+      path_aliases renames the top folder, e.g. path_aliases={'include': 'inc'}.

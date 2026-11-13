@@ -1,3 +1,49 @@
+{#-
+  Identifier group: global ids and the descriptors that accompany them.
+  - generate_global_id / generate_descriptor_for_analysis: a locally minted gid and its
+    matching human-readable descriptor. Pass both the same prefix and
+    descriptor list so the descriptor shows exactly what the gid hashes.
+  - normalize_descriptors: a cleaned, delimiter-safe descriptor string for
+    ids minted by an external service (e.g. Dewrangle).
+-#}
+
+{#- '<prefix>_' || md5(values joined by '|'); nulls hash as ''. -#}
+{%- macro generate_global_id(prefix='', descriptor=[], study_id='') -%}
+    {%- set formatted_columns = [] -%}
+    {%- for col in descriptor -%}
+        {%- do formatted_columns.append("cast(coalesce(" ~ col ~ ", '') as text)") -%}
+    {%- endfor -%}
+{{
+    "'" ~ prefix ~ "' || '_' || md5(" ~ formatted_columns | join(" || '|' || ") ~ ")"
+}}
+{%- endmacro -%}
+
+{#-
+  Analysis column showing exactly what a global id was built from, so a
+  harmonizer can query it: '<label|label>:<prefix>-[<value|value>]'.
+  Takes the same prefix/descriptor args as generate_global_id, so the descriptor
+  always shows exactly what the gid was hashed from (nulls render as '').
+  Labels default to the column names without table alias or quotes;
+  pass `labels` to override.
+-#}
+{%- macro generate_descriptor_for_analysis(prefix='', descriptor=[], labels=none) -%}
+    {%- if descriptor | length == 0 -%}
+        {{ exceptions.raise_compiler_error("generate_descriptor_for_analysis requires at least one descriptor column") }}
+    {%- endif -%}
+    {%- if labels is not none and labels | length != descriptor | length -%}
+        {{ exceptions.raise_compiler_error("generate_descriptor_for_analysis: labels and descriptor must have the same length") }}
+    {%- endif -%}
+    {%- set label_parts = [] -%}
+    {%- set value_parts = [] -%}
+    {%- for col in descriptor -%}
+        {%- do label_parts.append(labels[loop.index0] if labels is not none else (col.split('.')[-1] | replace('"', ''))) -%}
+        {%- do value_parts.append("cast(coalesce(" ~ col ~ ", '') as text)") -%}
+    {%- endfor -%}
+{{
+    "'" ~ (label_parts | join('|')) ~ ":" ~ prefix ~ "-[' || " ~ (value_parts | join(" || '|' || ")) ~ " || ']'"
+}}
+{%- endmacro -%}
+
 {%- macro _normalize_descriptor_part(
     expr,
     delimiter=',',

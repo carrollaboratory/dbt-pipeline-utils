@@ -63,6 +63,17 @@
     end
 {% endmacro %}
 
+{% macro identifier_uri(column_name, base_uri) %}
+    {%- if not base_uri -%}
+        {{ exceptions.raise_compiler_error("identifier_uri requires base_uri") }}
+    {%- endif -%}
+    {%- set ns = namespace(sql="nullif(trim(cast(" ~ column_name ~ " as " ~ dbt.type_string() ~ ")), '')") -%}
+    {%- for char, code in [('%', '%25'), (' ', '%20'), ('/', '%2F'), ('?', '%3F'), ('#', '%23')] -%}
+        {%- set ns.sql = "replace(" ~ ns.sql ~ ", '" ~ char ~ "', '" ~ code ~ "')" -%}
+    {%- endfor -%}
+    '{{ base_uri.rstrip('/') | replace("'", "''") }}/' || {{ ns.sql }}
+{% endmacro %}
+
 {% macro normalize_http_uri(column_name, default_scheme='https') %}
     {%- set value = "nullif(trim(cast(" ~ column_name ~ " as " ~ dbt.type_string() ~ ")), '')" -%}
     case
@@ -167,3 +178,7 @@ where not exists (
 )
 
 {% endtest %}
+
+{% macro normalize_doi(column_name) %}
+    nullif(trim(cast({{ column_name }} as {{ dbt.type_string() }})), '')
+{% endmacro %}

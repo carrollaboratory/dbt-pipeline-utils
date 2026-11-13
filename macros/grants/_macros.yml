@@ -5,9 +5,8 @@ macros:
     description: >
       Shared on-run-end helper that grants a role full access to every schema
       produced by models matching a given project tag during the current dbt run.
-      The two project-specific wrappers (`grant_inc_devs_access`,
-      `grant_kf_devs_access`) delegate directly to this macro with their
-      fixed `tag` / `users_role` values.
+      Pipelines call it from a small on-run-end wrapper that fixes `tag` and
+      `users_role`, e.g. `grant_devs_access(tag='kids_first', users_role='kf_users')`.
 
 
       **Behavior:**
@@ -55,26 +54,11 @@ macros:
           The database role to receive the grants. Must be an existing role
           in the target database (e.g. `include_users`, `kf_users`).
 
-  - name: grant_inc_devs_access
-    description: >
-      On-run-end wrapper around `grant_devs_access`. Grants `include_users`
-      access to all schemas produced by models tagged `include` in the current
-      run (e.g. `brainpower`, `aadsc` src/int schemas). Delegates entirely to
-      `grant_devs_access(tag='include', users_role='include_users')`.
-
-  - name: grant_kf_devs_access
-    description: >
-      On-run-end wrapper around `grant_devs_access`. Grants `kf_users`
-      access to all schemas produced by models tagged `kids_first` in the
-      current run. Delegates entirely to
-      `grant_devs_access(tag='kids_first', users_role='kf_users')`.
-
   - name: grant_schema_role_access
     description: >
       Standalone utility macro that grants a specified role full access to a target
-      schema. Unlike the on-run-end grant macros (`grant_inc_devs_access`,
-      `grant_kf_devs_access`), this macro is not tied to a dbt run lifecycle and is
-      intended to be called manually via `dbt run-operation` whenever a new role needs
+      schema. Unlike `grant_devs_access`, this macro is not tied to a dbt run
+      lifecycle and is intended to be called manually via `dbt run-operation` whenever a new role needs
       access to the `combined`, `access`, or `*_export` schemas.
 
 

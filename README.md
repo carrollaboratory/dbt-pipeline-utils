@@ -362,11 +362,23 @@ For non-GitHub-release sources, a project-specific importer can still be supplie
 ## Shared dbt macros and generic tests
 
 This repo is importable as a dbt package. It exports [`macros/`](macros/)
-through `macro-paths`. The dependent URI/CURIE macros, regex helpers, and
-generic tests are grouped in
-[`uri_curie.sql`](macros/uri_curie/uri_curie.sql); their public names and
-arguments are unchanged. It has no models or seeds of its own. Standalone descriptor
-checks and macro-example tests are not loaded or run in downstream projects.
+through `macro-paths` and has no models or seeds of its own. Only macros that
+are useful to more than one pipeline belong here; architecture-specific macros
+(e.g. KF/INCLUDE STB generation, combined unions, descriptor views) stay in
+their pipeline repos. Related macros are grouped in one file per topic:
+
+| Folder | File | Macros |
+| --- | --- | --- |
+| [`identifiers/`](macros/identifiers/) | `identifiers.sql` | `generate_global_id`, `generate_descriptor_for_analysis`, `normalize_descriptors` |
+| | `generate_placeholder_global_ids_table.sql` | run-operation |
+| [`profiling/`](macros/profiling/) | `profile_queries.sql` | `profile_column_presence`, `profile_distinct_counts`, `profile_column_relationships`, `profile_column_pair`, `profile_join_coverage` ([quickstart](macros/profiling/docs/profiling_quickstart.md)) |
+| | `store_profile.sql` | `store_profile`, `get_profile`, `run_get_profile` |
+| [`warehouse_naming/`](macros/warehouse_naming/) | `schema_name_from_path.sql` | `schema_name_from_path` |
+| [`uri_curie/`](macros/uri_curie/) | `uri_curie.sql` | `regex_match`, `uri_curie_patterns`, `normalize_curie`, `identifier_uri`, `normalize_http_uri`, `normalize_doi`, generic tests |
+| [`grants/`](macros/grants/) | `grants.sql` | `grant_devs_access`, `grant_schema_role_access` |
+| [`observability/`](macros/observability/) | `warn_slow_models.sql` | `warn_slow_models` |
+
+Standalone macro-example tests are not loaded or run in downstream projects.
 Installing the Python package with pip does not install these dbt resources.
 
 Add it to a pipeline repo's `packages.yml`:
@@ -375,15 +387,28 @@ Add it to a pipeline repo's `packages.yml`:
 packages:
   - git: "https://github.com/carrollaboratory/dbt-pipeline-utils.git"
     revision: main  # pin to a tag/commit for anything beyond local testing
-  - package: dbt-labs/dbt_utils   # required directly by some pipeline macros (e.g. combined_union)
+  - package: dbt-labs/dbt_utils   # required by the profile_* macros
     version: [">=1.1.0", "<2.0.0"]
 ```
 
-Then run `dbt deps` in the pipeline repo and call macros with the package's `name` from `dbt_project.yml` as the namespace, e.g. `{{ dbt_pipeline_utils.grant_devs_access(tag=..., users_role=...) }}`.
+Then run `dbt deps` in the pipeline repo and call macros with the package's
+`name` from `dbt_project.yml` as the namespace, e.g.
+`{{ dbt_pipeline_utils.generate_global_id(prefix='sb', descriptor=['subject_id']) }}`.
 
 This package does not declare `dbt_utils` as a dependency. Include
-`dbt-labs/dbt_utils` as shown above when using macros such as `combined_union`;
+`dbt-labs/dbt_utils` as shown above when using the `profile_*` macros;
 the generic tests do not require it.
+
+### Schema naming
+
+dbt only uses `generate_schema_name` from the root project, so a pipeline that
+wants path-based schemas keeps a one-line wrapper:
+
+```sql
+{% macro generate_schema_name(custom_schema_name, node) -%}
+    {{ return(dbt_pipeline_utils.schema_name_from_path(custom_schema_name, node, path_aliases={'include': 'inc'})) }}
+{%- endmacro %}
+```
 
 ### Using generic tests
 

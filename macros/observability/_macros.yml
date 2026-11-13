@@ -1,0 +1,19 @@
+version: 2
+
+macros:
+  - name: warn_slow_models
+    description: |
+      Logs a warning for each model whose execution time exceeds the configured
+      runtime threshold. This is called automatically from on-run-end and does
+      not fail the dbt run.
+
+      Configure the threshold in dbt_project.yml or pass it with --vars:
+        vars:
+          model_runtime_warning_seconds: 300
+
+      Command line example:
+        dbt run --vars '{"model_runtime_warning_seconds": 120}'
+
+      The warning includes the warehouse relation, model name, execution time,
+      threshold, and result status. Query-plan and scan-efficiency analysis is
+      adapter-specific and is not inferred by this macro.

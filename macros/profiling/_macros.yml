@@ -1,0 +1,101 @@
+version: 2
+
+macros:
+  - name: profile_column_presence
+    description: |
+      Returns a SELECT showing which groups (default ingest_provenance) populate
+      which columns. measure: 'any' (1/0), 'count' or 'proportion'.
+      Full usage and how to read results: macros/profiling/docs/profiling_quickstart.md.
+
+      Args: relation, group_by='ingest_provenance', include, except, measure='any', blank_as_null=false
+
+      Usage (wrap in double curly braces, e.g. in dbt show --inline):
+        profile_column_presence(ref('cmg_main_subject'))
+
+  - name: profile_distinct_counts
+    description: |
+      Returns a SELECT with the number of distinct non-null values per column,
+      overall or per group. See macros/profiling/docs/profiling_quickstart.md.
+
+      Args: relation, group_by=none, include, except, blank_as_null=false
+
+      Usage (wrap in double curly braces, e.g. in dbt show --inline):
+        profile_distinct_counts(ref('cmg_main_subject'), group_by='source_snapshot')
+
+  - name: profile_column_relationships
+    description: |
+      Returns a SELECT classifying every pair of the given columns as 1:1, 1:N,
+      N:1 or N:N (NULL counts as a value). See macros/profiling/docs/profiling_quickstart.md.
+
+      Args: relation, columns, group_by=none, except
+
+      Usage (wrap in double curly braces, e.g. in dbt show --inline):
+        profile_column_relationships(ref('cmg_main_subject'), columns=['subject_id', 'family_id'])
+
+  - name: profile_column_pair
+    description: |
+      Returns a SELECT listing the values of column_a that map to more than one
+      column_b value, and vice versa. Empty result = 1:1. See macros/profiling/docs/profiling_quickstart.md.
+
+      Args: relation, column_a, column_b, group_by=none, max_examples=10
+
+      Usage (wrap in double curly braces, e.g. in dbt show --inline):
+        profile_column_pair(ref('cmg_main_subject'), 'subject_id', 'family_id')
+
+  - name: profile_join_coverage
+    description: |
+      Returns a one-row SELECT (or one row per group) describing what
+      `left join right on left_columns = right_columns` would do: unmatched rows,
+      null keys, fan-out and rows added. Checks can be combined with union all.
+      See macros/profiling/docs/profiling_quickstart.md.
+
+      Args: left_relation, right_relation, left_columns, right_columns=left_columns,
+            left_where, right_where, group_by (must be in left_columns), label
+
+      Usage (wrap in double curly braces, e.g. in dbt show --inline):
+        profile_join_coverage(ref('cmg_main_sample'), ref('cmg_int_subject'), left_columns=['subject_id', 'source_snapshot_id'])
+
+  - name: store_profile
+    description: |
+      Profiles a relation and stores results in a table.
+      This is the primary ad hoc entry point and supports append-only history:
+      only changed profile rows are inserted with a new profiled_at timestamp.
+
+      Required args:
+        - profile_table
+
+      Optional args:
+        - profile_database (defaults to target.database)
+        - profile_schema (defaults to target.schema)
+        - profile_include_columns (list)
+        - profile_exclude_columns (list)
+        - profile_where_clause
+        - profile_group_by (list)
+        - adhoc_database (defaults to profile_database)
+        - adhoc_schema (defaults to profile_schema)
+        - adhoc_table (defaults to profile_<profile_table>)
+
+      Command line usage:
+        dbt run-operation store_profile --args '{"profile_schema": "dev_inc_brainpower_src", "profile_table": "inc_brainpower_src_datasets"}'
+
+  - name: get_profile
+    description: |
+      Backward-compatible wrapper around store_profile.
+      Accepts an args dictionary and forwards all supported profile options.
+
+      Required args:
+        - args (dictionary)
+
+      Command line usage:
+        dbt run-operation get_profile --args '{"profile_schema": "dev_inc_brainpower_src", "profile_table": "inc_brainpower_src_datasets"}'
+
+  - name: run_get_profile
+    description: |
+      Backward-compatible wrapper around store_profile.
+      Accepts an args dictionary and forwards all supported profile options.
+
+      Required args:
+        - args (dictionary)
+
+      Command line usage:
+        dbt run-operation run_get_profile --args '{"profile_schema": "dev_inc_brainpower_src", "profile_table": "inc_brainpower_src_datasets"}'

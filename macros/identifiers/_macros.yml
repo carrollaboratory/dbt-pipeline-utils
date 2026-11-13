@@ -1,0 +1,110 @@
+version: 2
+
+macros:
+  - name: generate_global_id
+    description: |
+      SQL expression for a locally minted global id:
+        '<prefix>_' || md5(value|value|...)
+      NULL values hash as ''. Pair it with generate_descriptor_for_analysis using the same
+      prefix and descriptor list.
+      Example:
+        generate_global_id(prefix='sa', descriptor=['sa.subject_id', 'sa.sample_id'])
+
+  - name: generate_descriptor_for_analysis
+    description: |
+      Builds a human-readable analysis column that shows exactly which values
+      were combined into a global id, so harmonizers can query and check it:
+        '<label|label>:<prefix>-[<value|value>]'
+      Pass the same prefix and descriptor list as generate_global_id so the
+      descriptor shows exactly what the gid was hashed from. NULL values render
+      as '' (same as generate_global_id). Labels default to the column names
+      without table alias or quotes.
+
+      Args: prefix, descriptor (list of column expressions), labels (optional
+      list, same length as descriptor)
+
+      Used from model SQL, for example:
+        generate_global_id(prefix='sa', descriptor=['sa.subject_id', 'sa.sample_id', 's.consent_group'])
+        generate_descriptor_for_analysis(prefix='sa', descriptor=['sa.subject_id', 'sa.sample_id', 's.consent_group'])
+        -> 'subject_id|sample_id|consent_group:sa-[S1|X1|GRU]'
+
+  - name: normalize_descriptors
+    description: |
+      Returns a normalized concatenated SQL expression for one or more
+      descriptor columns.
+      Used when building stable composite descriptors from multiple fields.
+
+      Quickstart:
+        macros/identifiers/docs/normalize_descriptors_quickstart.md
+
+      Default behavior per descriptor entry:
+        - trims leading and trailing whitespace
+        - collapses internal whitespace to a single space
+        - preserves case
+        - preserves special characters
+        - escapes the chosen delimiter
+        - converts blank strings to null
+
+      Keep the common case simple by passing a list of SQL expressions:
+        normalize_descriptors(descriptor_cols=['id', 'study_code'])
+
+      For overrides, pass a list item as a dictionary with expr plus only the
+      options you need to change:
+        normalize_descriptors(
+          descriptor_cols=[
+            'id',
+            {'expr': 'file_name', 'escape_delimiter': false},
+            {'expr': 'normalized_hpo_term', 'keep_case': false}
+          ],
+          delimiter=';'
+        )
+
+      A fixed descriptor string can also be normalized with its own override
+      options:
+        normalize_descriptors(
+          descriptor_str='brainpower,v2',
+          descriptor_str_options={'escape_delimiter': true, 'keep_case': true}
+        )
+
+      Required args:
+        - descriptor_cols (list)
+      Optional args:
+        - descriptor_str
+        - delimiter (defaults to ,)
+        - default_options (dictionary)
+        - descriptor_str_options (dictionary)
+
+  - name: generate_placeholder_global_ids_table
+    description: |
+      Creates an empty placeholder global_ids table with the expected schema.
+      Used when a downstream pipeline expects the table to exist before real
+      data is populated.
+
+      Required args:
+        - schema_name
+      Optional args:
+        - table_name (defaults to global_ids)
+
+      Command line usage:
+        dbt run-operation generate_placeholder_global_ids_table --args '{"schema_name": "inc_brainpower_raw"}'
+
+      Explicit table name:
+        dbt run-operation generate_placeholder_global_ids_table --args '{"schema_name": "inc_brainpower_raw", "table_name": "global_ids"}'
+
+      Example sql:
+      create schema if not exists "kf_chr_18_raw";
+      drop table if exists "kf_chr_18_raw"."global_ids";
+      create table "kf_chr_18_raw"."global_ids" as
+      select
+          cast(null as varchar) as "globalId",
+          cast(null as varchar) as "studyGlobalId",
+          cast(null as varchar) as "studyId",
+          cast(null as varchar) as "studyName",
+          cast(null as varchar) as "fhirResourceType",
+          cast(null as varchar) as "descriptor",
+          cast(null as varchar) as "descriptorState",
+          cast(null as timestamp) as "globalIdCreatedAt",
+          cast(null as varchar) as "globalIdCreatedBy",
+          cast(null as timestamp) as "descriptorCreatedAt",
+          cast(null as varchar) as "descriptorCreatedBy"
+      where 1 = 0;
